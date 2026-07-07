@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ЕППБ — Единый портал поддержки бизнеса
 
-## Getting Started
+MVP цифровой платформы с no-code конструктором услуг и форм.
+Стек: Next.js 14 (App Router) + TypeScript, Supabase (Postgres + Auth + Storage),
+shadcn/ui + Tailwind, Zod. Деплой — Vercel.
 
-First, run the development server:
+- Модель данных: `ARCHITECTURE.md` и папка `types/`.
+- Логика/валидация: папка `lib/` (условия, формулы, Zod-схемы).
+- База данных: миграции в `supabase/migrations/`, клиенты в `lib/supabase/`.
+
+## Запуск локально
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Откроется http://localhost:3000. Но сначала нужно настроить базу (ниже),
+иначе работать с данными не получится.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Полезные команды:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev     # локальный запуск с автоперезагрузкой
+npm run build   # production-сборка (проверяет типы)
+npm run lint    # проверка кода
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+# База данных (Supabase) — пошагово для новичка
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Supabase — это «облачный» PostgreSQL с готовой авторизацией и хранилищем файлов.
+Пройди шаги по порядку, это займёт ~10 минут.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Шаг 1. Создать проект Supabase
 
-## Deploy on Vercel
+1. Зайди на https://supabase.com и зарегистрируйся (можно через GitHub).
+2. Нажми **New project**.
+3. Заполни:
+   - **Name** — например `eppb`.
+   - **Database Password** — придумай надёжный пароль и **сохрани его** (пригодится
+     для CLI; для обычной работы через дашборд он не нужен).
+   - **Region** — ближайший (напр. `Central EU (Frankfurt)`).
+4. Нажми **Create new project** и подожди 1–2 минуты, пока проект поднимется.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Шаг 2. Взять ключи
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+В дашборде проекта: **Project Settings** (шестерёнка внизу слева) → **API**.
+Понадобятся три значения:
+
+| В дашборде | Переменная в проекте | Что это |
+|------------|----------------------|---------|
+| **Project URL** | `NEXT_PUBLIC_SUPABASE_URL` | Адрес твоей БД |
+| **Project API keys → `anon` `public`** | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Публичный ключ (можно в браузер) |
+| **Project API keys → `service_role`** | `SUPABASE_SERVICE_ROLE_KEY` | **Секретный** ключ (только сервер!) |
+
+> ⚠️ `service_role` даёт полный доступ в обход правил безопасности. Никогда не
+> вставляй его в клиентский код и не коммить в git.
+
+## Шаг 3. Прописать ключи в проект
+
+1. Скопируй файл-пример в локальный (его git не отслеживает):
+   ```bash
+   cp .env.example .env.local
+   ```
+2. Открой `.env.local` и вставь свои значения:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
+   SUPABASE_SERVICE_ROLE_KEY=eyJhbGci...
+   ANTHROPIC_API_KEY=...    # позже, для AI
+   ```
+   `.env.local` уже в `.gitignore` — ключи в репозиторий не попадут.
+
+## Шаг 4. Применить миграции (создать таблицы)
+
+Миграции — это SQL-файлы в `supabase/migrations/`, которые создают таблицы и
+правила безопасности. Применяй их **по порядку имён файлов**.
+
+**Вариант А — через дашборд (проще всего):**
+1. В дашборде открой **SQL Editor** (слева) → **New query**.
+2. Открой первый файл `supabase/migrations/20260708090000_init_schema.sql`,
+   скопируй всё содержимое, вставь в редактор и нажми **Run**.
+3. Повтори для остальных файлов **строго по порядку**:
+   - `..._init_schema.sql` — таблицы и индексы;
+   - `..._rls_policies.sql` — правила безопасности (RLS) и триггеры;
+   - `..._seed.sql` — демо-данные (необязательно, но удобно для теста).
+
+**Вариант Б — через Supabase CLI (если удобнее командная строка):**
+```bash
+npm install -g supabase
+supabase login
+supabase link --project-ref <ref-из-URL-проекта>
+supabase db push
+```
+
+## Шаг 5. Сделать себя администратором
+
+Роли (`user` / `admin`) хранятся в таблице `users_profiles`. Профиль создаётся
+автоматически при регистрации. Чтобы получить права админа:
+
+1. Зарегистрируйся в приложении (когда появится экран входа) **или** создай
+   пользователя вручную: дашборд → **Authentication** → **Add user**.
+2. В **SQL Editor** выполни (подставь свой email):
+   ```sql
+   update users_profiles set role = 'admin' where email = 'ты@example.com';
+   ```
+
+## Шаг 6. (Опционально) сгенерировать типы БД
+
+Можно получить TypeScript-типы прямо из схемы БД:
+```bash
+npx supabase gen types typescript --project-id <ref> > types/database.ts
+```
+
+---
+
+## Структура БД (коротко)
+
+| Таблица | Хранит | Связь |
+|---------|--------|-------|
+| `users_profiles` | Профиль и роль (`user`/`admin`) | 1:1 с `auth.users` |
+| `services` | Услуги (конфиг-конструктор, `steps` в jsonb) | — |
+| `applications` | Заявки пользователей (`form_data` в jsonb) | → `services`, `auth.users` |
+| `reference_lists` | Справочники (регионы и т.п.) | ← `services` (по id в поле) |
+| `projects` | Проекты для карты (задел) | — |
+| `materials` | Раздел материалов (задел) | — |
+| `analytics_items` | Аналитика (задел) | — |
+
+**Безопасность (RLS):** обычный пользователь видит и меняет только свои заявки и
+свой профиль; администратор видит и меняет всё; услуги/справочники/проекты/
+материалы/аналитика доступны на чтение всем, а на запись — только админу.
+
+## Клиенты в коде
+
+- `lib/supabase/client.ts` — для клиентских компонентов (браузер).
+- `lib/supabase/server.ts` — для серверных компонентов и route handlers.
+- `lib/supabase/admin.ts` — сервисный клиент (service_role), только на сервере.
