@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-export const userRoleSchema = z.enum(["applicant", "operator", "admin"]);
+export const userRoleSchema = z.enum(["user", "admin"]);
 
 const iinBin = z.string().regex(/^\d{12}$/, "Должно быть 12 цифр");
 
@@ -13,7 +13,6 @@ export const userSchema = z.object({
   iin: iinBin.optional(),
   bin: iinBin.optional(),
   role: userRoleSchema,
-  organizationId: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

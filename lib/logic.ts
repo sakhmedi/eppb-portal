@@ -6,7 +6,7 @@ import type {
   VisibilityRule,
   Condition,
   ConditionGroup,
-  ApplicationData,
+  ApplicationFormData,
 } from "@/types";
 
 /** Правило — это группа (and/or), а не одиночное условие? */
@@ -14,7 +14,7 @@ function isGroup(rule: VisibilityRule): rule is ConditionGroup {
   return (rule as ConditionGroup).logic !== undefined;
 }
 
-/** Считаем значение «пустым» (для операторов empty/notEmpty и проверки required). */
+/** Считаем значение «пустым» (для операторов isEmpty/isNotEmpty и проверки required). */
 export function isEmptyValue(value: unknown): boolean {
   return (
     value === undefined ||
@@ -24,7 +24,7 @@ export function isEmptyValue(value: unknown): boolean {
   );
 }
 
-/** Собрать все `name` полей, на которые ссылается правило (рекурсивно). */
+/** Собрать все `key` полей, на которые ссылается правило (рекурсивно). */
 export function collectRuleFields(rule: VisibilityRule): string[] {
   if (isGroup(rule)) return rule.conditions.flatMap(collectRuleFields);
   return [rule.field];
@@ -33,23 +33,23 @@ export function collectRuleFields(rule: VisibilityRule): string[] {
 /** Проверить одно элементарное условие против данных заявки. */
 export function evaluateCondition(
   cond: Condition,
-  data: ApplicationData,
+  data: ApplicationFormData,
 ): boolean {
   const left = data[cond.field];
   const right = cond.value;
 
   switch (cond.operator) {
-    case "eq":
+    case "equals":
       return left === right;
-    case "neq":
+    case "notEquals":
       return left !== right;
-    case "gt":
+    case "greaterThan":
       return Number(left) > Number(right);
-    case "gte":
+    case "greaterThanOrEqual":
       return Number(left) >= Number(right);
-    case "lt":
+    case "lessThan":
       return Number(left) < Number(right);
-    case "lte":
+    case "lessThanOrEqual":
       return Number(left) <= Number(right);
     case "in":
       return Array.isArray(right) && right.includes(left as string | number);
@@ -57,9 +57,9 @@ export function evaluateCondition(
       return Array.isArray(left)
         ? left.includes(right as never)
         : String(left ?? "").includes(String(right ?? ""));
-    case "empty":
+    case "isEmpty":
       return isEmptyValue(left);
-    case "notEmpty":
+    case "isNotEmpty":
       return !isEmptyValue(left);
     default:
       return false;
@@ -69,7 +69,7 @@ export function evaluateCondition(
 /** Проверить правило целиком (с учётом вложенных and/or групп). */
 export function evaluateRule(
   rule: VisibilityRule,
-  data: ApplicationData,
+  data: ApplicationFormData,
 ): boolean {
   if (!isGroup(rule)) return evaluateCondition(rule, data);
   return rule.logic === "and"
@@ -80,7 +80,7 @@ export function evaluateRule(
 /** Видно ли поле/шаг: если правила нет — видно всегда. */
 export function isVisible(
   rule: VisibilityRule | undefined,
-  data: ApplicationData,
+  data: ApplicationFormData,
 ): boolean {
   return rule ? evaluateRule(rule, data) : true;
 }

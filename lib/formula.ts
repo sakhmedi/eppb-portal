@@ -12,7 +12,7 @@
 //
 // Пример: evaluateFormula("loanAmount * rate / 100", data)
 
-import type { ApplicationData, Service } from "@/types";
+import type { ApplicationFormData, Service } from "@/types";
 import { isEmptyValue } from "./logic";
 
 /** Ошибка синтаксиса формулы (битое выражение — это баг конфига услуги). */
@@ -197,7 +197,7 @@ export function parseFormula(expression: string): Node {
 
 // ── 3. Вычисление дерева с подстановкой значений полей ───────────────────────
 
-function evalNode(node: Node, data: ApplicationData): number {
+function evalNode(node: Node, data: ApplicationFormData): number {
   switch (node.k) {
     case "num":
       return node.v;
@@ -244,7 +244,7 @@ function evalNode(node: Node, data: ApplicationData): number {
  */
 export function evaluateFormula(
   expression: string,
-  data: ApplicationData,
+  data: ApplicationFormData,
 ): number | null {
   const ast = parseFormula(expression);
   try {
@@ -287,23 +287,23 @@ export function extractFormulaIdentifiers(expression: string): string[] {
  */
 export function applyCalculations(
   service: Service,
-  data: ApplicationData,
-): ApplicationData {
+  data: ApplicationFormData,
+): ApplicationFormData {
   const calculated = service.steps
     .flatMap((step) => step.fields)
-    .filter((f) => f.calculated)
-    .map((f) => ({ name: f.name, expression: f.calculated!.expression }));
+    .filter((f) => f.type === "calculated" && f.formula)
+    .map((f) => ({ key: f.key, expression: f.formula!.expression }));
 
-  const out: ApplicationData = { ...data };
+  const out: ApplicationFormData = { ...data };
   let changed = true;
   let pass = 0;
   // Ограничиваем число проходов на случай циклических зависимостей.
   while (changed && pass <= calculated.length) {
     changed = false;
-    for (const { name, expression } of calculated) {
+    for (const { key, expression } of calculated) {
       const value = evaluateFormula(expression, out);
-      if (out[name] !== value) {
-        out[name] = value;
+      if (out[key] !== value) {
+        out[key] = value;
         changed = true;
       }
     }

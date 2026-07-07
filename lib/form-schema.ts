@@ -1,16 +1,16 @@
-// Генератор Zod-схемы для ЗАПОЛНЕННОЙ формы (Application.data).
+// Генератор Zod-схемы для ЗАПОЛНЕННОЙ формы (Application.formData).
 //
 // Схему конкретной услуги нельзя написать заранее — набор полей у каждой услуги
 // свой. Поэтому мы СТРОИМ её из конфига услуги во время работы:
 //   const schema = buildFormSchema(service);
-//   const result = schema.safeParse(applicationData);
+//   const result = schema.safeParse(applicationFormData);
 //
 // Тонкость: обязательность поля (required) проверяется только если поле ВИДНО
-// (с учётом visibleIf самого поля и его шага). Скрытое поле не обязано быть
-// заполненным — это и есть корректная условная валидация.
+// (с учётом visibilityCondition самого поля и его шага). Скрытое поле не обязано
+// быть заполненным — это и есть корректная условная валидация.
 
 import { z } from "zod";
-import type { Field, Service, ApplicationData } from "@/types";
+import type { Field, Service, ApplicationFormData } from "@/types";
 import { isEmptyValue, isVisible } from "./logic";
 
 /** Базовая схема значения ОДНОГО поля — без учёта обязательности. */
@@ -26,8 +26,6 @@ function fieldValueSchema(field: Field): z.ZodTypeAny {
     }
     case "checkbox":
       return z.boolean();
-    case "multiselect":
-      return z.array(z.string());
     case "email":
       return z.string().email();
     case "iin":
@@ -68,30 +66,30 @@ function optionalValue(schema: z.ZodTypeAny): z.ZodTypeAny {
 export function buildFormSchema(service: Service) {
   const shape: Record<string, z.ZodTypeAny> = {};
   // Запоминаем поля и правило видимости их шага для проверки required.
-  const editable: Array<{ field: Field; stepRule: Field["visibleIf"] }> = [];
+  const editable: Array<{
+    field: Field;
+    stepRule: Field["visibilityCondition"];
+  }> = [];
 
   for (const step of service.steps) {
     for (const field of step.fields) {
-      if (field.calculated) continue; // расчётное поле не вводят руками
-      shape[field.name] = optionalValue(fieldValueSchema(field));
-      editable.push({ field, stepRule: step.visibleIf });
+      if (field.type === "calculated") continue; // расчётное поле не вводят руками
+      shape[field.key] = optionalValue(fieldValueSchema(field));
+      editable.push({ field, stepRule: step.visibilityCondition });
     }
   }
 
   return z.object(shape).superRefine((data, ctx) => {
-    const values = data as ApplicationData;
+    const values = data as ApplicationFormData;
     for (const { field, stepRule } of editable) {
       const visible =
-        isVisible(stepRule, values) && isVisible(field.visibleIf, values);
-      if (
-        field.validation?.required &&
-        visible &&
-        isEmptyValue(values[field.name])
-      ) {
+        isVisible(stepRule, values) &&
+        isVisible(field.visibilityCondition, values);
+      if (field.required && visible && isEmptyValue(values[field.key])) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: field.validation.message ?? "Обязательное поле",
-          path: [field.name],
+          message: field.validation?.message ?? "Обязательное поле",
+          path: [field.key],
         });
       }
     }

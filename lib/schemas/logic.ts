@@ -6,16 +6,16 @@ import { z } from "zod";
 import type { VisibilityRule, ConditionGroup } from "@/types";
 
 export const conditionOperatorSchema = z.enum([
-  "eq",
-  "neq",
-  "gt",
-  "gte",
-  "lt",
-  "lte",
+  "equals",
+  "notEquals",
+  "greaterThan",
+  "greaterThanOrEqual",
+  "lessThan",
+  "lessThanOrEqual",
   "in",
   "contains",
-  "empty",
-  "notEmpty",
+  "isEmpty",
+  "isNotEmpty",
 ]);
 
 export const conditionSchema = z.object({

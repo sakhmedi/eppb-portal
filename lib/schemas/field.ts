@@ -1,4 +1,6 @@
-// Zod-схема поля формы + проверка, что select/radio/multiselect имеют варианты.
+// Zod-схема поля формы + проверки:
+//  - у select/radio должны быть варианты (options или ссылка на справочник);
+//  - у поля type==="calculated" должна быть формула.
 
 import { z } from "zod";
 import { visibilityRuleSchema, calculatedFormulaSchema } from "./logic";
@@ -13,10 +15,10 @@ export const fieldTypeSchema = z.enum([
   "select",
   "radio",
   "checkbox",
-  "multiselect",
   "file",
   "iin",
   "bin",
+  "calculated",
 ]);
 
 export const fieldOptionSchema = z.object({
@@ -25,7 +27,6 @@ export const fieldOptionSchema = z.object({
 });
 
 export const fieldValidationSchema = z.object({
-  required: z.boolean().optional(),
   min: z.number().optional(),
   max: z.number().optional(),
   pattern: z.string().optional(),
@@ -33,39 +34,48 @@ export const fieldValidationSchema = z.object({
 });
 
 /** Типы, которым обязательно нужны варианты выбора. */
-const CHOICE_TYPES: readonly string[] = ["select", "radio", "multiselect"];
+const CHOICE_TYPES: readonly string[] = ["select", "radio"];
 
 export const fieldSchema = z
   .object({
     id: z.string(),
-    name: z
+    key: z
       .string()
       .regex(
         /^[a-zA-Z][a-zA-Z0-9_]*$/,
-        "name: латиница/цифры/_, начинается с буквы",
+        "key: латиница/цифры/_, начинается с буквы",
       ),
     type: fieldTypeSchema,
     label: z.string().min(1),
     placeholder: z.string().optional(),
-    helpText: z.string().optional(),
+    hint: z.string().optional(),
+    required: z.boolean().optional(),
     defaultValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
     validation: fieldValidationSchema.optional(),
     options: z.array(fieldOptionSchema).optional(),
-    referenceCode: z.string().optional(),
-    visibleIf: visibilityRuleSchema.optional(),
-    calculated: calculatedFormulaSchema.optional(),
+    referenceId: z.string().optional(),
+    visibilityCondition: visibilityRuleSchema.optional(),
+    formula: calculatedFormulaSchema.optional(),
   })
   .superRefine((field, ctx) => {
     // У поля выбора должны быть либо options, либо ссылка на справочник.
     if (
       CHOICE_TYPES.includes(field.type) &&
       !field.options?.length &&
-      !field.referenceCode
+      !field.referenceId
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Поле "${field.name}" (${field.type}) требует options или referenceCode`,
+        message: `Поле "${field.key}" (${field.type}) требует options или referenceId`,
         path: ["options"],
+      });
+    }
+    // Расчётное поле обязано иметь формулу.
+    if (field.type === "calculated" && !field.formula) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Поле "${field.key}" (calculated) требует formula`,
+        path: ["formula"],
       });
     }
   });

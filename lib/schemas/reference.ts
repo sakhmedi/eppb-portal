@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-export const referenceItemSchema = z.object({
+export const referenceOptionSchema = z.object({
   value: z.string(),
   label: z.string(),
   parentValue: z.string().optional(),
@@ -10,9 +10,8 @@ export const referenceItemSchema = z.object({
 
 export const referenceSchema = z.object({
   id: z.string(),
-  code: z.string().min(1),
   title: z.string().min(1),
-  items: z.array(referenceItemSchema),
+  options: z.array(referenceOptionSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
