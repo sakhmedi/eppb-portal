@@ -15,20 +15,19 @@ export type FieldType =
   | "select" // выбор одного из списка
   | "radio" // то же, но переключателями
   | "checkbox" // одиночный флажок (да/нет)
-  | "multiselect" // выбор нескольких значений
   | "file" // загрузка файла
   | "iin" // ИИН — 12 цифр, физлицо
-  | "bin"; // БИН — 12 цифр, юрлицо
+  | "bin" // БИН — 12 цифр, юрлицо
+  | "calculated"; // значение вычисляется по формуле, пользователь его не вводит
 
-/** Вариант выбора для select / radio / multiselect. */
+/** Вариант выбора для select / radio. */
 export interface FieldOption {
   value: string;
   label: string;
 }
 
-/** Правила валидации значения поля. */
+/** Доп. правила валидации значения поля (обязательность — отдельно, в Field.required). */
 export interface FieldValidation {
-  required?: boolean;
   /** Для number — минимальное значение; для text — минимальная длина. */
   min?: number;
   /** Для number — максимальное значение; для text — максимальная длина. */
@@ -41,27 +40,31 @@ export interface FieldValidation {
 
 /** Поле формы. */
 export interface Field {
+  /** Стабильный идентификатор (UUID) — идентичность поля в БД. */
   id: ID;
   /**
-   * Машинный ключ поля. Именно под ним значение хранится в заявке
-   * (Application.data) и по нему на поле ссылаются условия и формулы.
-   * Должен быть уникальным в рамках услуги, напр. "companyBin".
+   * Человекочитаемый машинный ключ. По нему значение хранится в заявке
+   * (Application.formData) и на поле ссылаются условия и формулы.
+   * Уникален в рамках услуги, напр. "companyBin".
    */
-  name: string;
+  key: string;
   type: FieldType;
   label: string;
   placeholder?: string;
-  helpText?: string;
+  /** Подсказка под полем. */
+  hint?: string;
+  /** Обязательно ли поле для заполнения. */
+  required?: boolean;
   defaultValue?: string | number | boolean;
   validation?: FieldValidation;
 
-  /** Варианты заданы прямо здесь... */
+  /** Варианты выбора заданы прямо здесь... */
   options?: FieldOption[];
-  /** ...или подтягиваются из справочника по его `code` (см. Reference). */
-  referenceCode?: string;
+  /** ...или подтягиваются из справочника по его id (см. Reference). */
+  referenceId?: ID;
 
   /** Поле видно, только если правило истинно. Нет правила — видно всегда. */
-  visibleIf?: VisibilityRule;
-  /** Если задано — поле расчётное (значение вычисляется, а не вводится). */
-  calculated?: CalculatedFormula;
+  visibilityCondition?: VisibilityRule;
+  /** Формула расчёта. Задаётся, когда type === "calculated". */
+  formula?: CalculatedFormula;
 }

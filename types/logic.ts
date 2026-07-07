@@ -3,23 +3,23 @@
 
 /** Оператор сравнения для условий видимости. */
 export type ConditionOperator =
-  | "eq" // равно
-  | "neq" // не равно
-  | "gt" // больше
-  | "gte" // больше или равно
-  | "lt" // меньше
-  | "lte" // меньше или равно
+  | "equals" // равно
+  | "notEquals" // не равно
+  | "greaterThan" // больше
+  | "greaterThanOrEqual" // больше или равно
+  | "lessThan" // меньше
+  | "lessThanOrEqual" // меньше или равно
   | "in" // значение входит в список
   | "contains" // строка/массив содержит значение
-  | "empty" // поле пустое
-  | "notEmpty"; // поле заполнено
+  | "isEmpty" // поле пустое
+  | "isNotEmpty"; // поле заполнено
 
 /** Одно элементарное условие: «поле `field` `operator` `value`». */
 export interface Condition {
-  /** `name` другого поля, от значения которого зависим. */
+  /** `key` другого поля, от значения которого зависим (см. Field.key). */
   field: string;
   operator: ConditionOperator;
-  /** С чем сравниваем. Для операторов empty/notEmpty не нужно. */
+  /** С чем сравниваем. Для операторов isEmpty/isNotEmpty не нужно. */
   value?: string | number | boolean | Array<string | number>;
 }
 
@@ -32,13 +32,16 @@ export interface ConditionGroup {
   conditions: VisibilityRule[];
 }
 
-/** Правило видимости: либо одно условие, либо группа условий. */
+/**
+ * Правило видимости: либо одно условие, либо группа условий.
+ * Простой услуге хватает одного Condition, сложной — вложенных групп and/or.
+ */
 export type VisibilityRule = Condition | ConditionGroup;
 
 /**
  * Расчётное поле — его значение вычисляется, а не вводится руками.
- * `expression` — выражение над `name` полей, напр. "area * pricePerM2".
- * `dependsOn` — список полей из выражения (чтобы пересчитывать при их изменении).
+ * `expression` — выражение над `key` полей, напр. "area * pricePerM2".
+ * `dependsOn` — список полей (key) из выражения, чтобы пересчитывать при изменении.
  */
 export interface CalculatedFormula {
   expression: string;

@@ -9,16 +9,15 @@ import { VisibilityRule } from "./logic";
 export interface Step {
   id: ID;
   title: string;
-  description?: string;
   /** Порядок шага в мастере (1, 2, 3…). */
   order: number;
   fields: Field[];
-  /** Шаг показывается, только если правило истинно. */
-  visibleIf?: VisibilityRule;
+  /** Шаг показывается, только если правило истинно (ветвление по шагам). */
+  visibilityCondition?: VisibilityRule;
 }
 
-/** Жизненный цикл услуги: черновик → опубликована → в архиве. */
-export type ServiceStatus = "draft" | "published" | "archived";
+/** Статус публикации услуги. */
+export type ServiceStatus = "draft" | "published";
 
 /**
  * Услуга — единица каталога. Собирается конструктором и хранится как JSON.
@@ -27,14 +26,14 @@ export type ServiceStatus = "draft" | "published" | "archived";
 export interface Service extends Timestamps {
   id: ID;
   /** Человекочитаемый URL-идентификатор, напр. "subsidii-msb". */
-  slug: string;
+  slug?: string;
   title: string;
   description?: string;
   category?: string;
-  /** Какая организация оказывает услугу (напр. «Фонд Даму»). */
+  /** Дочерняя организация, оказывающая услугу (напр. «Фонд Даму»). */
   organization?: string;
   status: ServiceStatus;
-  /** Растёт при каждой публикации изменений. См. Application.serviceVersion. */
-  version: number;
+  /** Растёт при публикации изменений. Заявка фиксирует версию (см. Application). */
+  version?: number;
   steps: Step[];
 }

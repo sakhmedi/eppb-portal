@@ -7,22 +7,22 @@ import { ID, ISODateString, Timestamps } from "./common";
 export type ApplicationStatus =
   | "draft" // черновик, ещё заполняется
   | "submitted" // подана
-  | "in_review" // на рассмотрении у оператора
+  | "in_review" // на рассмотрении
   | "approved" // одобрена
   | "rejected"; // отклонена
 
 /**
- * Значения полей заявки. Ключ — это `name` поля из услуги (Field.name),
+ * Ответы пользователя. Ключ — это `key` поля из услуги (Field.key),
  * значение — то, что ввёл пользователь. Тип значения заранее не известен,
  * поэтому `unknown` (при чтении проверяем/приводим через Zod).
  */
-export type ApplicationData = Record<string, unknown>;
+export type ApplicationFormData = Record<string, unknown>;
 
 /** Загруженный документ (файл лежит в Supabase Storage). */
 export interface ApplicationDocument {
   id: ID;
-  /** К какому file-полю относится (Field.name). */
-  fieldName: string;
+  /** К какому file-полю относится (Field.key). */
+  fieldKey: string;
   fileName: string;
   /** Путь к файлу в Supabase Storage. */
   storagePath: string;
@@ -45,10 +45,12 @@ export interface Application extends Timestamps {
    * Версия услуги на момент подачи. Храним её, чтобы уже поданная заявка
    * не «поехала», если админ потом изменит форму услуги.
    */
-  serviceVersion: number;
-  applicantId: ID;
+  serviceVersion?: number;
+  userId: ID;
+  /** Текущий этап мастера (Step.id) — где пользователь остановился. */
+  currentStepId: ID;
   status: ApplicationStatus;
-  data: ApplicationData;
+  formData: ApplicationFormData;
   documents: ApplicationDocument[];
-  history: ApplicationStatusChange[];
+  statusHistory: ApplicationStatusChange[];
 }
