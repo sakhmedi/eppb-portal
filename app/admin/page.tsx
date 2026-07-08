@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -5,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function AdminPage() {
   return (
@@ -18,12 +20,14 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle>Конструктор услуг</CardTitle>
           <CardDescription>
-            Отсюда админ будет собирать услуги через no-code конструктор и вести
-            заявки. Наполним на следующих шагах.
+            Собирайте услуги без кода: этапы, поля, ветвление и авторасчёты, с живым
+            предпросмотром. Публикация выводит услугу в каталог.
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Пока пусто.
+        <CardContent>
+          <Button asChild>
+            <Link href="/admin/services">Открыть конструктор услуг</Link>
+          </Button>
         </CardContent>
       </Card>
     </main>
