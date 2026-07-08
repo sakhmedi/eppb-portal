@@ -98,14 +98,34 @@ supabase db push
 ## Шаг 5. Сделать себя администратором
 
 Роли (`user` / `admin`) хранятся в таблице `users_profiles`. Профиль создаётся
-автоматически при регистрации. Чтобы получить права админа:
+автоматически при регистрации триггером `handle_new_user` (роль `user`).
 
-1. Зарегистрируйся в приложении (когда появится экран входа) **или** создай
-   пользователя вручную: дашборд → **Authentication** → **Add user**.
+Сменить роль напрямую мешает триггер **`prevent_role_change`**: он запрещает
+менять роль тому, кто сам не админ. В **SQL Editor** запрос идёт без
+пользовательской сессии (`auth.uid()` пуст → `is_admin()` = `false`), поэтому
+обычный `update ... set role` там тоже будет заблокирован.
+
+Чтобы назначить **первого** админа, временно отключи триггер, поменяй роль и
+включи его обратно:
+
+1. Сначала зарегистрируйся в приложении на `/register` **или** создай
+   пользователя вручную: дашборд → **Authentication** → **Add user** — чтобы
+   строка в `users_profiles` уже существовала.
 2. В **SQL Editor** выполни (подставь свой email):
    ```sql
-   update users_profiles set role = 'admin' where email = 'ты@example.com';
+   alter table public.users_profiles
+     disable trigger trg_users_profiles_prevent_role_change;
+
+   update public.users_profiles
+   set role = 'admin'
+   where email = 'ты@example.com';
+
+   alter table public.users_profiles
+     enable trigger trg_users_profiles_prevent_role_change;
    ```
+
+Дальнейшие изменения ролей можно делать уже под сессией администратора
+(для него `is_admin()` = `true`, и триггер пропускает изменение).
 
 ## Шаг 6. (Опционально) сгенерировать типы БД
 
@@ -137,3 +157,29 @@ npx supabase gen types typescript --project-id <ref> > types/database.ts
 - `lib/supabase/client.ts` — для клиентских компонентов (браузер).
 - `lib/supabase/server.ts` — для серверных компонентов и route handlers.
 - `lib/supabase/admin.ts` — сервисный клиент (service_role), только на сервере.
+
+---
+
+## Авторизация и защита маршрутов
+
+Вход — по email и паролю через Supabase Auth (позже заменится на eGov IDP,
+см. комментарий в `lib/auth.ts`).
+
+- **Регистрация** — `/register` (email + пароль от 6 символов). Профиль создаёт
+  триггер `handle_new_user`, роль по умолчанию `user`. Если в проекте включено
+  подтверждение email — подтверди адрес по ссылке из письма, затем войди.
+- **Вход** — `/login`. **Выход** — кнопка «Выйти» в верхнем меню.
+
+| Зона | Маршруты | Кто видит |
+|------|----------|-----------|
+| Публичная | `/`, `/catalog`, `/services/[slug]` | все |
+| Личный кабинет | `/account` | только вошедшие |
+| Админкабинет | `/admin` | только роль `admin` |
+
+`middleware.ts` продлевает сессию Supabase на каждом запросе и редиректит
+неавторизованного с защищённого маршрута на `/login`. Роль `admin` проверяется
+в `app/admin/layout.tsx` (читается из `users_profiles`); обычного пользователя
+на `/admin` вежливо возвращает в его кабинет.
+
+Ключевые файлы: `lib/auth.ts` (getUser / getProfile), `lib/auth-actions.ts`
+(login / register / signOut), `lib/supabase/middleware.ts`, `components/site-header.tsx`.
