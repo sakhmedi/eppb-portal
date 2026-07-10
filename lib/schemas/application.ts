@@ -7,6 +7,7 @@ import { z } from "zod";
 
 export const applicationStatusSchema = z.enum([
   "draft",
+  "awaiting_documents",
   "submitted",
   "in_review",
   "approved",

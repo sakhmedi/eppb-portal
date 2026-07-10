@@ -3,25 +3,70 @@
 // Рендерер услуги: из JSON (Service) собирает рабочую пошаговую форму.
 // Один шаг на экране, индикатор прогресса, навигация Назад/Далее.
 // Вся логика — в useFormEngine; здесь только композиция UI.
+//
+// Опциональные пропсы (для реальной подачи заявки; демо их не передаёт):
+//   onSubmit      — на последнем шаге вместо тупика показываем кнопку submit;
+//   onStepAdvance — автосейв черновика при переходе на новый шаг;
+//   onUploadFile  — реальная загрузка файлов в Storage (иначе — только имя файла).
 
+import { useEffect, useRef } from "react";
 import type { Service, ApplicationFormData, ReferenceOption, ID } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFormEngine } from "./use-form-engine";
-import { FieldRow } from "./field-row";
+import { FieldRow, type UploadFileHandler } from "./field-row";
 
 interface FormRendererProps {
   service: Service;
   initialData?: ApplicationFormData;
-  /** Справочники для полей с referenceId (пока передаём вручную, без БД). */
+  /** Справочники для полей с referenceId. */
   references?: Record<ID, ReferenceOption[]>;
   /** Показать текущий formData под формой (для наглядности на демо-странице). */
   debug?: boolean;
+  /** С какого шага начать (возобновление черновика). */
+  initialStepId?: string;
+  /** Вызывается на последнем шаге после успешной валидации — реальная отправка. */
+  onSubmit?: (formData: ApplicationFormData) => void;
+  /** Вызывается при переходе на новый шаг — автосейв черновика. */
+  onStepAdvance?: (formData: ApplicationFormData, currentStepId: string) => void;
+  /** Загрузка файла для поля type="file"; возвращает путь в Storage. */
+  onUploadFile?: UploadFileHandler;
+  /** Подпись кнопки отправки (по умолчанию «Отправить»). */
+  submitLabel?: string;
+  /** Идёт отправка — блокируем кнопку. */
+  submitting?: boolean;
 }
 
-export function FormRenderer({ service, initialData, references, debug }: FormRendererProps) {
-  const engine = useFormEngine(service, initialData);
+export function FormRenderer({
+  service,
+  initialData,
+  references,
+  debug,
+  initialStepId,
+  onSubmit,
+  onStepAdvance,
+  onUploadFile,
+  submitLabel = "Отправить",
+  submitting,
+}: FormRendererProps) {
+  const engine = useFormEngine(service, initialData, { initialStepId });
   const { currentStep, currentIndex, totalSteps, formData, errors } = engine;
+
+  // Автосейв: срабатывает при СМЕНЕ шага (не на каждый ввод), сохраняя данные и id
+  // шага, на котором пользователь сейчас находится — чтобы вернуться на это же место.
+  const mounted = useRef(false);
+  const stepId = currentStep?.id;
+  useEffect(() => {
+    if (!onStepAdvance || !stepId) return;
+    // Первый рендер пропускаем — там сохранять ещё нечего (данные не менялись).
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    onStepAdvance(formData, stepId);
+    // Намеренно реагируем только на смену шага, formData берём актуальный.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepId]);
 
   // На случай, если все шаги скрыты ветвлением.
   if (!currentStep) {
@@ -29,6 +74,11 @@ export function FormRenderer({ service, initialData, references, debug }: FormRe
   }
 
   const progress = totalSteps > 0 ? ((currentIndex + 1) / totalSteps) * 100 : 0;
+
+  function handleSubmit() {
+    if (!onSubmit) return;
+    if (engine.validate()) onSubmit(engine.formData);
+  }
 
   return (
     <div className="space-y-4">
@@ -42,7 +92,7 @@ export function FormRenderer({ service, initialData, references, debug }: FormRe
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
           <div
-            className="h-full rounded-full bg-primary transition-all"
+            className="bg-brand h-full rounded-full transition-all"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -60,6 +110,7 @@ export function FormRenderer({ service, initialData, references, debug }: FormRe
               formData={formData}
               error={errors[field.key]}
               references={references}
+              onUploadFile={onUploadFile}
               onChange={(value) => engine.setValue(field.key, value)}
             />
           ))}
@@ -70,10 +121,15 @@ export function FormRenderer({ service, initialData, references, debug }: FormRe
         <Button variant="outline" onClick={engine.back} disabled={engine.isFirst}>
           Назад
         </Button>
-        {/* Отправки пока нет: на последнем шаге кнопка «Далее» задизейблена. */}
-        <Button onClick={engine.next} disabled={engine.isLast}>
-          Далее
-        </Button>
+        {engine.isLast && onSubmit ? (
+          <Button className="bg-brand" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Отправка…" : submitLabel}
+          </Button>
+        ) : (
+          <Button onClick={engine.next} disabled={engine.isLast}>
+            Далее
+          </Button>
+        )}
       </div>
 
       {debug && (

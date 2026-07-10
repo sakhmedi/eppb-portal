@@ -10,15 +10,29 @@ import { Label } from "@/components/ui/label";
 import { FieldControl } from "./field-control";
 import { resolveOptions } from "./use-form-engine";
 
+/** Обработчик загрузки файла: грузит File и возвращает путь в Storage + имя. */
+export type UploadFileHandler = (
+  fieldKey: string,
+  file: File,
+) => Promise<{ storagePath: string; fileName: string }>;
+
 interface FieldRowProps {
   field: Field;
   formData: ApplicationFormData;
   error?: string;
   references?: Record<ID, ReferenceOption[]>;
+  onUploadFile?: UploadFileHandler;
   onChange: (value: unknown) => void;
 }
 
-export function FieldRow({ field, formData, error, references, onChange }: FieldRowProps) {
+export function FieldRow({
+  field,
+  formData,
+  error,
+  references,
+  onUploadFile,
+  onChange,
+}: FieldRowProps) {
   // Ветвление поля: нет правила — видно всегда; есть — считаем по текущим ответам.
   if (!isVisible(field.visibilityCondition, formData)) return null;
 
@@ -39,6 +53,7 @@ export function FieldRow({ field, formData, error, references, onChange }: Field
       field={field}
       value={formData[field.key]}
       options={options}
+      onUploadFile={onUploadFile}
       onChange={onChange}
     />
   );

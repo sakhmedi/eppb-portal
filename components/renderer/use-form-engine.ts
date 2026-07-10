@@ -45,17 +45,34 @@ export interface FormEngine {
   next: () => void;
   /** Вернуться на предыдущий видимый шаг (без валидации). */
   back: () => void;
+  /** Проверить текущий шаг (для кнопки submit на последнем шаге). */
+  validate: () => boolean;
+}
+
+export interface FormEngineOptions {
+  /** С какого шага (Step.id) начать — для возобновления черновика с места остановки. */
+  initialStepId?: string;
 }
 
 export function useFormEngine(
   service: Service,
   initialData?: ApplicationFormData,
+  options?: FormEngineOptions,
 ): FormEngine {
   const [formData, setFormData] = useState<ApplicationFormData>(() =>
     buildInitialData(service, initialData),
   );
   // Индекс считаем по ИСХОДНОМУ порядку шагов; в видимые пересчитываем ниже.
-  const [stepIndex, setStepIndex] = useState(0);
+  // Если задан initialStepId — стартуем с него (возобновление черновика).
+  const [stepIndex, setStepIndex] = useState(() => {
+    if (!options?.initialStepId) return 0;
+    const initial = buildInitialData(service, initialData);
+    const visible = [...service.steps]
+      .sort((a, b) => a.order - b.order)
+      .filter((s) => isVisible(s.visibilityCondition, initial));
+    const idx = visible.findIndex((s) => s.id === options.initialStepId);
+    return idx >= 0 ? idx : 0;
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Шаги по порядку order.
@@ -131,6 +148,7 @@ export function useFormEngine(
     isLast: safeIndex === visibleSteps.length - 1,
     next,
     back,
+    validate: validateCurrentStep,
   };
 }
 

@@ -6,7 +6,8 @@ import { ID, ISODateString, Timestamps } from "./common";
 /** Статус заявки в её жизненном цикле. */
 export type ApplicationStatus =
   | "draft" // черновик, ещё заполняется
-  | "submitted" // подана
+  | "awaiting_documents" // первичная заявка подана, ждём документы и согласия
+  | "submitted" // подана полностью
   | "in_review" // на рассмотрении
   | "approved" // одобрена
   | "rejected"; // отклонена

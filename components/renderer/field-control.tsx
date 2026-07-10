@@ -3,6 +3,7 @@
 // Один input под тип поля. Чистый switch (field.type) → нужный shadcn-контрол.
 // Никакой бизнес-логики здесь нет — только «нарисовать и вернуть значение».
 
+import { useState } from "react";
 import type { Field, FieldOption } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import type { UploadFileHandler } from "./field-row";
 
 interface FieldControlProps {
   field: Field;
@@ -23,10 +25,19 @@ interface FieldControlProps {
   onChange: (value: unknown) => void;
   /** Уже разрешённые варианты (из field.options или справочника). */
   options: FieldOption[];
+  /** Реальная загрузка файла (если не передан — file-поле хранит только имя). */
+  onUploadFile?: UploadFileHandler;
   disabled?: boolean;
 }
 
-export function FieldControl({ field, value, onChange, options, disabled }: FieldControlProps) {
+export function FieldControl({
+  field,
+  value,
+  onChange,
+  options,
+  onUploadFile,
+  disabled,
+}: FieldControlProps) {
   const id = `field-${field.key}`;
 
   switch (field.type) {
@@ -114,8 +125,20 @@ export function FieldControl({ field, value, onChange, options, disabled }: Fiel
       );
 
     case "file":
-      // БД и загрузки пока нет: сохраняем ИМЯ файла (строку), чтобы отработала
-      // валидация required. Реальная загрузка в Supabase Storage — на следующих шагах.
+      // Если передан обработчик загрузки — грузим файл в Storage и храним его путь.
+      if (onUploadFile) {
+        return (
+          <FileUploadControl
+            id={id}
+            fieldKey={field.key}
+            value={value}
+            disabled={disabled}
+            onUploadFile={onUploadFile}
+            onChange={onChange}
+          />
+        );
+      }
+      // Иначе (демо, без БД) сохраняем только ИМЯ файла — чтобы отработала валидация required.
       return (
         <Input
           id={id}
@@ -150,4 +173,68 @@ export function FieldControl({ field, value, onChange, options, disabled }: Fiel
         />
       );
   }
+}
+
+/**
+ * Контрол загрузки файла с реальной отправкой в Storage.
+ * При выборе файла: грузим через onUploadFile, а в значение поля кладём путь (storagePath).
+ * Значение поля — строка-путь (как ждёт buildFormSchema), не сам File.
+ */
+function FileUploadControl({
+  id,
+  fieldKey,
+  value,
+  disabled,
+  onUploadFile,
+  onChange,
+}: {
+  id: string;
+  fieldKey: string;
+  value: unknown;
+  disabled?: boolean;
+  onUploadFile: UploadFileHandler;
+  onChange: (value: unknown) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const { storagePath, fileName: name } = await onUploadFile(fieldKey, file);
+      onChange(storagePath);
+      setFileName(name);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось загрузить файл");
+      onChange(undefined);
+      setFileName(null);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Файл уже был загружен ранее (возобновление заявки) — показываем это.
+  const alreadyUploaded = typeof value === "string" && value.length > 0;
+
+  return (
+    <div className="space-y-1.5">
+      <Input
+        id={id}
+        type="file"
+        disabled={disabled || uploading}
+        onChange={(e) => handleFile(e.target.files?.[0])}
+      />
+      {uploading && <p className="text-xs text-muted-foreground">Загрузка…</p>}
+      {!uploading && fileName && (
+        <p className="text-xs text-brand">Загружено: {fileName}</p>
+      )}
+      {!uploading && !fileName && alreadyUploaded && (
+        <p className="text-xs text-muted-foreground">Файл уже загружен.</p>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
 }
