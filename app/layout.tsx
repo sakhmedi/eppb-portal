@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -24,10 +25,14 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body
-        className={cn("min-h-screen font-sans antialiased", geistSans.variable)}
+        className={cn(
+          "flex min-h-screen flex-col font-sans antialiased",
+          geistSans.variable,
+        )}
       >
         <SiteHeader />
-        {children}
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

@@ -1,61 +1,52 @@
 // Публичный каталог услуг. Доступен всем.
-// RLS в БД сама отдаёт анонимному пользователю только опубликованные услуги
-// (status = 'published'), поэтому здесь дополнительной фильтрации по статусу не нужно.
+// Серверный компонент грузит опубликованные услуги из БД (RLS отдаёт анониму только
+// published) и собирает списки фактических категорий и организаций для фильтров.
+// Интерактив (поиск, фильтры, пустые состояния) — в клиентском CatalogBrowser.
 
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Suspense } from "react";
+import type { Metadata } from "next";
 
-interface ServiceRow {
-  slug: string | null;
-  title: string;
-  description: string | null;
-  organization: string | null;
-  category: string | null;
+import { getPublishedServices } from "@/lib/services";
+import { CatalogBrowser } from "@/components/catalog/catalog-browser";
+
+export const metadata: Metadata = {
+  title: "Каталог услуг — ЕППБ",
+  description:
+    "Каталог мер поддержки бизнеса холдинга «Байтерек»: поиск и фильтры по направлению и организации.",
+};
+
+// Уникальные непустые значения поля, отсортированные по алфавиту.
+function distinct(values: (string | null)[]): string[] {
+  return Array.from(new Set(values.filter((v): v is string => !!v))).sort((a, b) =>
+    a.localeCompare(b, "ru"),
+  );
 }
 
 export default async function CatalogPage() {
-  const supabase = createClient();
-  const { data: services } = await supabase
-    .from("services")
-    .select("slug, title, description, organization, category")
-    .order("title");
-
-  const list = (services as ServiceRow[] | null) ?? [];
+  const services = await getPublishedServices();
+  const categories = distinct(services.map((s) => s.category));
+  const organizations = distinct(services.map((s) => s.organization));
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-10">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Каталог услуг</h1>
-        <p className="text-muted-foreground">Выберите услугу, чтобы посмотреть детали.</p>
+        <p className="text-muted-foreground">
+          Меры поддержки бизнеса холдинга «Байтерек» и его дочерних организаций.
+        </p>
       </div>
 
-      {list.length === 0 ? (
+      {services.length === 0 ? (
         <p className="text-sm text-muted-foreground">Пока нет опубликованных услуг.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {list.map((s) => (
-            <Link key={s.slug} href={`/services/${s.slug}`} className="block">
-              <Card className="h-full transition-colors hover:border-foreground/30">
-                <CardHeader>
-                  <CardTitle className="text-base">{s.title}</CardTitle>
-                  <CardDescription>{s.organization}</CardDescription>
-                </CardHeader>
-                {s.description && (
-                  <CardContent className="text-sm text-muted-foreground">
-                    {s.description}
-                  </CardContent>
-                )}
-              </Card>
-            </Link>
-          ))}
-        </div>
+        // useSearchParams в CatalogBrowser требует Suspense-границы.
+        <Suspense fallback={null}>
+          <CatalogBrowser
+            services={services}
+            categories={categories}
+            organizations={organizations}
+          />
+        </Suspense>
       )}
     </main>
   );

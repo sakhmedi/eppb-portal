@@ -27,6 +27,15 @@ export interface ReferenceList {
   options: ReferenceOption[];
 }
 
+/** Публичная карточка услуги для главной и каталога (только нужные поля). */
+export interface PublicService {
+  slug: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  organization: string | null;
+}
+
 /** Краткая карточка услуги для списка в админке. */
 export interface ServiceSummary {
   id: ID;
@@ -71,6 +80,29 @@ export async function listServiceSummaries(): Promise<ServiceSummary[]> {
     status: row.status,
     stepsCount: Array.isArray(row.steps) ? row.steps.length : 0,
     updatedAt: row.updated_at,
+  }));
+}
+
+/**
+ * Опубликованные услуги для публичных страниц (главная, каталог).
+ * RLS в БД сама отдаёт анониму только status = 'published', поэтому фильтр по статусу
+ * здесь не нужен. Услуги без slug пропускаем: на них нет страницы детали (ссылка вела бы
+ * в 404), поэтому в каталоге и на главной их не показываем.
+ */
+export async function getPublishedServices(): Promise<PublicService[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("services")
+    .select("slug, title, description, category, organization")
+    .not("slug", "is", null)
+    .order("title");
+
+  return (data ?? []).map((row) => ({
+    slug: row.slug as string,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    organization: row.organization,
   }));
 }
 
