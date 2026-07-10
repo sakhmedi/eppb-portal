@@ -5,7 +5,7 @@
 // и условие видимости (ветвление). Всё — без кода.
 
 import { useEffect, useState } from "react";
-import type { Field, FieldType, ID, ReferenceOption, Service } from "@/types";
+import type { Field, FieldType, FieldValidation, ID, ReferenceOption, Service } from "@/types";
 import {
   Dialog,
   DialogContent,
@@ -85,6 +85,23 @@ export function FieldEditorDialog({
     if (type !== "calculated") delete next.formula;
     if (type === "calculated") next.required = false;
     setDraft(next);
+  }
+
+  // Значение по умолчанию: для числового поля — число, иначе строка.
+  function setDefaultValue(raw: string) {
+    if (raw === "") return patch({ defaultValue: undefined });
+    patch({ defaultValue: draft.type === "number" ? Number(raw) : raw });
+  }
+
+  // Правка validation.min/max: убираем пустые ключи, пустой объект → undefined.
+  function patchValidation(p: Partial<FieldValidation>) {
+    setDraft((prev) => {
+      const merged: FieldValidation = { ...prev.validation, ...p };
+      (Object.keys(merged) as (keyof FieldValidation)[]).forEach((k) => {
+        if (merged[k] === undefined) delete merged[k];
+      });
+      return { ...prev, validation: Object.keys(merged).length ? merged : undefined };
+    });
   }
 
   // Источник вариантов для select/radio: свои варианты или справочник.
@@ -210,6 +227,57 @@ export function FieldEditorDialog({
               <Label htmlFor="f-req" className="font-normal">
                 Обязательное поле
               </Label>
+            </div>
+          )}
+
+          {/* Значение по умолчанию + ограничения (min/max) */}
+          {draft.type !== "calculated" && draft.type !== "checkbox" && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="f-default">Значение по умолчанию</Label>
+                <Input
+                  id="f-default"
+                  type={draft.type === "number" ? "number" : "text"}
+                  value={draft.defaultValue === undefined ? "" : String(draft.defaultValue)}
+                  onChange={(e) => setDefaultValue(e.target.value)}
+                />
+              </div>
+              {(draft.type === "number" ||
+                draft.type === "text" ||
+                draft.type === "textarea") && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="f-min">
+                      {draft.type === "number" ? "Мин. значение" : "Мин. длина"}
+                    </Label>
+                    <Input
+                      id="f-min"
+                      type="number"
+                      value={draft.validation?.min ?? ""}
+                      onChange={(e) =>
+                        patchValidation({
+                          min: e.target.value === "" ? undefined : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="f-max">
+                      {draft.type === "number" ? "Макс. значение" : "Макс. длина"}
+                    </Label>
+                    <Input
+                      id="f-max"
+                      type="number"
+                      value={draft.validation?.max ?? ""}
+                      onChange={(e) =>
+                        patchValidation({
+                          max: e.target.value === "" ? undefined : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -38,3 +38,4 @@ next-env.d.ts
 # project docs kept local
 ARCHITECTURE.md
 CLAUDE.md
+/docs
