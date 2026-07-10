@@ -118,6 +118,21 @@ export async function getServiceById(id: string): Promise<Service | null> {
   return data ? rowToService(data as ServiceRow) : null;
 }
 
+/**
+ * Одна услуга по slug — для публичной карточки и страницы подачи.
+ * RLS отдаёт анониму только published, поэтому неопубликованная услуга вернёт null → 404.
+ */
+export async function getServiceBySlug(slug: string): Promise<Service | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("services")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  return data ? rowToService(data as ServiceRow) : null;
+}
+
 /** Все справочники — для привязки к полям и для предпросмотра. */
 export async function listReferenceLists(): Promise<ReferenceList[]> {
   const supabase = createClient();
