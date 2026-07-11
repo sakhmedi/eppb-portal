@@ -7,6 +7,7 @@ import type {
   ApplicationFormData,
   ApplicationDocument,
   ApplicationStatus,
+  ApplicationStatusChange,
 } from "@/types";
 
 /** Активная заявка пользователя по услуге — то, что нужно странице подачи. */
@@ -83,9 +84,20 @@ export async function getOrCreateApplication(
 export interface MyApplication {
   id: string;
   status: ApplicationStatus;
+  createdAt: string;
   updatedAt: string;
   serviceTitle: string;
   serviceSlug: string | null;
+}
+
+/** Услуга, как её отдаёт join к applications (Supabase типизирует связь как массив-или-объект). */
+type ServiceRel =
+  | { id?: string; slug: string | null; title: string }
+  | { id?: string; slug: string | null; title: string }[]
+  | null;
+
+function relToService(rel: ServiceRel) {
+  return Array.isArray(rel) ? (rel[0] ?? null) : rel;
 }
 
 /** Заявки текущего пользователя (RLS отдаёт только свои). */
@@ -93,23 +105,66 @@ export async function getMyApplications(): Promise<MyApplication[]> {
   const supabase = createClient();
   const { data } = await supabase
     .from("applications")
-    .select("id, status, updated_at, service:services(slug, title)")
+    .select("id, status, created_at, updated_at, service:services(slug, title)")
     .order("updated_at", { ascending: false });
 
   return (data ?? []).map((row) => {
-    // service приходит как связанные данные услуги (Supabase типизирует join как массив);
-    // берём первую запись, либо null, если услугу сняли с публикации.
-    const rel = row.service as
-      | { slug: string | null; title: string }
-      | { slug: string | null; title: string }[]
-      | null;
-    const service = Array.isArray(rel) ? (rel[0] ?? null) : rel;
+    // service — связанные данные услуги, либо null, если услугу сняли с публикации.
+    const service = relToService(row.service as ServiceRel);
     return {
       id: row.id as string,
       status: row.status as ApplicationStatus,
+      createdAt: row.created_at as string,
       updatedAt: row.updated_at as string,
       serviceTitle: service?.title ?? "Услуга",
       serviceSlug: service?.slug ?? null,
     };
   });
+}
+
+/** Полная заявка для страницы отдельной заявки в кабинете. */
+export interface ApplicationDetail {
+  id: string;
+  status: ApplicationStatus;
+  formData: ApplicationFormData;
+  documents: ApplicationDocument[];
+  statusHistory: ApplicationStatusChange[];
+  serviceId: string;
+  serviceVersion: number | null;
+  serviceTitle: string;
+  serviceSlug: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Одна заявка пользователя по id. RLS отдаёт только свою строку (или админу) —
+ * для чужого id вернётся null, поэтому страница показывает 404.
+ */
+export async function getApplicationById(id: string): Promise<ApplicationDetail | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("applications")
+    .select(
+      "id, status, form_data, documents, status_history, service_id, service_version, created_at, updated_at, service:services(id, slug, title)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  const service = relToService(data.service as ServiceRel);
+  return {
+    id: data.id as string,
+    status: data.status as ApplicationStatus,
+    formData: (data.form_data ?? {}) as ApplicationFormData,
+    documents: (data.documents ?? []) as ApplicationDocument[],
+    statusHistory: (data.status_history ?? []) as ApplicationStatusChange[],
+    serviceId: data.service_id as string,
+    serviceVersion: (data.service_version as number | null) ?? null,
+    serviceTitle: service?.title ?? "Услуга",
+    serviceSlug: service?.slug ?? null,
+    createdAt: data.created_at as string,
+    updatedAt: data.updated_at as string,
+  };
 }

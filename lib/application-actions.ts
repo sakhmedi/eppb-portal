@@ -213,3 +213,26 @@ export async function submitDocuments(
   revalidatePath("/account");
   return { ok: true, status: "submitted", id: appId };
 }
+
+/**
+ * Отметить все уведомления прочитанными: ставим notifications_last_read_at = сейчас.
+ * Уведомления выводятся из status_history (см. lib/notifications.ts), поэтому «прочитано»
+ * хранится одной отметкой в профиле. RLS "profiles: update own" разрешает менять свой профиль.
+ */
+export async function markNotificationsRead(): Promise<SubmitResult> {
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, errors: ["Требуется вход в систему"] };
+
+  const { error } = await supabase
+    .from("users_profiles")
+    .update({ notifications_last_read_at: new Date().toISOString() })
+    .eq("id", user.id);
+  if (error) return { ok: false, errors: [error.message] };
+
+  revalidatePath("/account");
+  return { ok: true };
+}

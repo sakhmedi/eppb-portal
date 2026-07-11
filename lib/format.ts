@@ -25,3 +25,30 @@ export function formatCalculatedValue(field: Field, value: unknown): string {
   // Прочие числа — до двух знаков, с разделителями разрядов (без хвостов вроде ...6666).
   return numberFormatter.format(num);
 }
+
+const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+const dateTimeFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** Дата без времени: «11 июля 2026». Пустое/битое значение → «—». */
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : dateFormatter.format(d);
+}
+
+/** Дата со временем: «11 июля 2026, 14:30». Пустое/битое значение → «—». */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : dateTimeFormatter.format(d);
+}
