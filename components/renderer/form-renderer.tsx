@@ -35,6 +35,8 @@ interface FormRendererProps {
   submitLabel?: string;
   /** Идёт отправка — блокируем кнопку. */
   submitting?: boolean;
+  /** Шаги (Step.id), которые показываем только для чтения (напр. уже поданные первичные). */
+  readOnlyStepIds?: string[];
 }
 
 export function FormRenderer({
@@ -48,9 +50,12 @@ export function FormRenderer({
   onUploadFile,
   submitLabel = "Отправить",
   submitting,
+  readOnlyStepIds,
 }: FormRendererProps) {
   const engine = useFormEngine(service, initialData, { initialStepId });
   const { currentStep, currentIndex, totalSteps, formData, errors } = engine;
+  // Текущий шаг только для чтения? (данные уже поданы — их можно просмотреть, но не менять).
+  const stepReadOnly = !!currentStep && !!readOnlyStepIds?.includes(currentStep.id);
 
   // Автосейв: срабатывает при СМЕНЕ шага (не на каждый ввод), сохраняя данные и id
   // шага, на котором пользователь сейчас находится — чтобы вернуться на это же место.
@@ -103,6 +108,11 @@ export function FormRenderer({
           <CardTitle className="text-lg">{currentStep.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          {stepReadOnly && (
+            <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+              Эти данные уже поданы в первичной заявке — их можно просмотреть, но не изменить.
+            </p>
+          )}
           {currentStep.fields.map((field) => (
             <FieldRow
               key={field.id}
@@ -111,6 +121,7 @@ export function FormRenderer({
               error={errors[field.key]}
               references={references}
               onUploadFile={onUploadFile}
+              disabled={stepReadOnly}
               onChange={(value) => engine.setValue(field.key, value)}
             />
           ))}

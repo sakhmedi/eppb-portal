@@ -22,6 +22,8 @@ interface FieldRowProps {
   error?: string;
   references?: Record<ID, ReferenceOption[]>;
   onUploadFile?: UploadFileHandler;
+  /** Поле только для чтения (напр. уже поданные первичные данные на этапе документов). */
+  disabled?: boolean;
   onChange: (value: unknown) => void;
 }
 
@@ -31,6 +33,7 @@ export function FieldRow({
   error,
   references,
   onUploadFile,
+  disabled,
   onChange,
 }: FieldRowProps) {
   // Ветвление поля: нет правила — видно всегда; есть — считаем по текущим ответам.
@@ -54,6 +57,7 @@ export function FieldRow({
       value={formData[field.key]}
       options={options}
       onUploadFile={onUploadFile}
+      disabled={disabled}
       onChange={onChange}
     />
   );

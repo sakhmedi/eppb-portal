@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { formatCalculatedValue } from "@/lib/format";
 import type { UploadFileHandler } from "./field-row";
 
 interface FieldControlProps {
@@ -150,13 +151,9 @@ export function FieldControl({
 
     case "calculated":
       // Расчётное поле пользователь не вводит — значение считает движок.
+      // Показываем отформатированным (деньги — с округлением и разрядами).
       return (
-        <Input
-          id={id}
-          disabled
-          readOnly
-          value={value === undefined || value === null ? "—" : String(value)}
-        />
+        <Input id={id} disabled readOnly value={formatCalculatedValue(field, value)} />
       );
 
     default:

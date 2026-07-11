@@ -7,8 +7,7 @@
 //   - отправка этапа (submitPrimary / submitDocuments) и экран подтверждения.
 // Сам движок формы не трогаем — передаём ему только колбэки.
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, FileClock, ArrowRight } from "lucide-react";
 
@@ -44,10 +43,35 @@ export function ApplyForm({
   initialStepId,
   references,
 }: ApplyFormProps) {
-  const router = useRouter();
-  const { primarySteps, documentSteps, hasDocumentStage } = splitStages(service);
-  const stageSteps = phase === "primary" ? primarySteps : documentSteps;
-  const stageService = serviceForStage(service, stageSteps);
+  // Этапы услуги считаем один раз (стабильная идентичность — не дёргаем движок ре-рендерами).
+  const { primarySteps, documentSteps, hasDocumentStage } = useMemo(
+    () => splitStages(service),
+    [service],
+  );
+
+  // Активная фаза держим в состоянии: после подачи первичной заявки переключаемся на
+  // «документы» прямо здесь (без перезагрузки страницы), чтобы кнопка «Приложить документы»
+  // вела к форме документов той же заявки.
+  const [activePhase, setActivePhase] = useState<"primary" | "documents">(phase);
+  // Ответы первичного этапа — нужны на этапе документов для ветвления видимости.
+  const [submittedData, setSubmittedData] = useState<ApplicationFormData | null>(null);
+
+  // На этапе документов показываем ВСЮ форму: первичные шаги — только для чтения (их уже
+  // подали), шаги документов — редактируемые. Так пользователь свободно ходит «Назад» к
+  // уже пройденным шагам, а «Назад» на первом шаге этапа документов ведёт к их просмотру.
+  const stageSteps = useMemo(
+    () =>
+      activePhase === "primary" ? primarySteps : [...primarySteps, ...documentSteps],
+    [activePhase, primarySteps, documentSteps],
+  );
+  const stageService = useMemo(
+    () => serviceForStage(service, stageSteps),
+    [service, stageSteps],
+  );
+  const readOnlyStepIds = useMemo(
+    () => (activePhase === "documents" ? primarySteps.map((s) => s.id) : undefined),
+    [activePhase, primarySteps],
+  );
 
   // Загруженные документы держим здесь, чтобы приложить их к submit и к автосейву.
   const documentsRef = useRef<ApplicationDocument[]>(initialDocuments);
@@ -97,16 +121,24 @@ export function ApplyForm({
     setSubmitting(true);
     setErrors([]);
     const result =
-      phase === "primary"
+      activePhase === "primary"
         ? await submitPrimary(applicationId, formData)
         : await submitDocuments(applicationId, formData, documentsRef.current);
     setSubmitting(false);
 
     if (result.ok && result.status) {
+      // Запоминаем первичные ответы — понадобятся на этапе документов для ветвления.
+      if (activePhase === "primary") setSubmittedData(formData);
       setConfirmation({ status: result.status, id: result.id ?? applicationId });
     } else {
       setErrors(result.errors ?? ["Не удалось отправить заявку"]);
     }
+  }
+
+  // Переход с экрана подтверждения к этапу документов — client-side, без перезагрузки.
+  function goToDocuments() {
+    setConfirmation(null);
+    setActivePhase("documents");
   }
 
   if (confirmation) {
@@ -114,21 +146,35 @@ export function ApplyForm({
       <Confirmation
         status={confirmation.status}
         id={confirmation.id}
-        onContinue={() => router.refresh()}
+        onContinue={goToDocuments}
       />
     );
   }
 
   const submitLabel =
-    phase === "documents"
+    activePhase === "documents"
       ? "Завершить подачу"
       : hasDocumentStage
         ? "Подать первичную заявку"
         : "Подать заявку";
 
+  // На этапе документов, если мы только что перешли из первичного, подставляем первичные
+  // ответы в initialData (для ветвления). initialStepId применим только к исходной фазе.
+  const formInitialData =
+    activePhase === "documents" && submittedData
+      ? { ...initialData, ...submittedData }
+      : initialData;
+  // На этапе документов стартуем с первого шага документов (первичные — сзади, для просмотра).
+  const formInitialStepId =
+    activePhase === "documents"
+      ? documentSteps[0]?.id
+      : activePhase === phase
+        ? initialStepId
+        : undefined;
+
   return (
     <div className="space-y-4">
-      {phase === "documents" && (
+      {activePhase === "documents" && (
         <p className="rounded-md border border-brand bg-brand-subtle p-3 text-sm">
           Первичная заявка уже подана. Приложите документы и подтвердите согласия, чтобы
           завершить подачу.
@@ -147,10 +193,12 @@ export function ApplyForm({
       )}
 
       <FormRenderer
+        key={activePhase}
         service={stageService}
-        initialData={initialData}
-        initialStepId={initialStepId}
+        initialData={formInitialData}
+        initialStepId={formInitialStepId}
         references={references}
+        readOnlyStepIds={readOnlyStepIds}
         onStepAdvance={handleStepAdvance}
         onUploadFile={handleUploadFile}
         onSubmit={handleSubmit}
