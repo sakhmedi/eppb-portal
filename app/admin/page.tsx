@@ -16,20 +16,37 @@ export default function AdminPage() {
         <p className="text-muted-foreground">Доступ только для роли admin.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Конструктор услуг</CardTitle>
-          <CardDescription>
-            Собирайте услуги без кода: этапы, поля, ветвление и авторасчёты, с живым
-            предпросмотром. Публикация выводит услугу в каталог.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild>
-            <Link href="/admin/services">Открыть конструктор услуг</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Конструктор услуг</CardTitle>
+            <CardDescription>
+              Собирайте услуги без кода: этапы, поля, ветвление и авторасчёты, с живым
+              предпросмотром. Публикация выводит услугу в каталог.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/admin/services">Открыть конструктор услуг</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Обработка заявок</CardTitle>
+            <CardDescription>
+              Все поданные заявки: просмотр данных и документов, смена статуса
+              (в работу, одобрить, отклонить) с записью в историю.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/admin/applications">Открыть заявки</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

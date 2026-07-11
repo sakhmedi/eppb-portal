@@ -122,10 +122,12 @@ export async function getMyApplications(): Promise<MyApplication[]> {
   });
 }
 
-/** Полная заявка для страницы отдельной заявки в кабинете. */
+/** Полная заявка для страницы отдельной заявки (кабинет пользователя и админка). */
 export interface ApplicationDetail {
   id: string;
   status: ApplicationStatus;
+  /** Владелец заявки. Нужен админке, чтобы подтянуть профиль заявителя. */
+  userId: string;
   formData: ApplicationFormData;
   documents: ApplicationDocument[];
   statusHistory: ApplicationStatusChange[];
@@ -146,7 +148,7 @@ export async function getApplicationById(id: string): Promise<ApplicationDetail 
   const { data } = await supabase
     .from("applications")
     .select(
-      "id, status, form_data, documents, status_history, service_id, service_version, created_at, updated_at, service:services(id, slug, title)",
+      "id, status, user_id, form_data, documents, status_history, service_id, service_version, created_at, updated_at, service:services(id, slug, title)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -157,6 +159,7 @@ export async function getApplicationById(id: string): Promise<ApplicationDetail 
   return {
     id: data.id as string,
     status: data.status as ApplicationStatus,
+    userId: data.user_id as string,
     formData: (data.form_data ?? {}) as ApplicationFormData,
     documents: (data.documents ?? []) as ApplicationDocument[],
     statusHistory: (data.status_history ?? []) as ApplicationStatusChange[],
@@ -167,4 +170,82 @@ export async function getApplicationById(id: string): Promise<ApplicationDetail 
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
+}
+
+/** Профиль заявителя (для шапки заявки в админке). */
+export interface ApplicantProfile {
+  fullName: string | null;
+  email: string | null;
+}
+
+/**
+ * Профиль владельца заявки по его user_id. RLS "profiles: read own or admin"
+ * пускает админа к чужим профилям. null — если профиля нет.
+ */
+export async function getApplicantProfile(userId: string): Promise<ApplicantProfile | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("users_profiles")
+    .select("full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!data) return null;
+  return { fullName: data.full_name ?? null, email: data.email ?? null };
+}
+
+/** Строка списка заявок в админке (все заявки, не только свои). */
+export interface AdminApplicationSummary {
+  id: string;
+  number: string;
+  status: ApplicationStatus;
+  serviceTitle: string;
+  applicantName: string | null;
+  applicantEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Все заявки для админки. RLS "applications: read own or admin" отдаёт админу все строки.
+ * Профили заявителей тянем отдельным запросом: FK applications.user_id ведёт на auth.users,
+ * а не на users_profiles, поэтому встроенный join невозможен — джойним по id в JS.
+ */
+export async function listApplicationsForAdmin(): Promise<AdminApplicationSummary[]> {
+  const supabase = createClient();
+
+  const { data: rows } = await supabase
+    .from("applications")
+    .select("id, status, created_at, updated_at, user_id, service:services(title)")
+    .order("created_at", { ascending: false });
+
+  const apps = rows ?? [];
+  const userIds = Array.from(new Set(apps.map((r) => r.user_id as string)));
+
+  // Профили заявителей одним запросом (users_profiles.id === applications.user_id).
+  const profiles = new Map<string, { full_name: string | null; email: string | null }>();
+  if (userIds.length > 0) {
+    const { data: profileRows } = await supabase
+      .from("users_profiles")
+      .select("id, full_name, email")
+      .in("id", userIds);
+    for (const p of profileRows ?? []) {
+      profiles.set(p.id as string, { full_name: p.full_name ?? null, email: p.email ?? null });
+    }
+  }
+
+  return apps.map((row) => {
+    const service = relToService(row.service as ServiceRel);
+    const profile = profiles.get(row.user_id as string);
+    return {
+      id: row.id as string,
+      number: (row.id as string).slice(0, 8).toUpperCase(),
+      status: row.status as ApplicationStatus,
+      serviceTitle: service?.title ?? "Услуга",
+      applicantName: profile?.full_name ?? null,
+      applicantEmail: profile?.email ?? null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  });
 }

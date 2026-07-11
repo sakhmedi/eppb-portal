@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
 import { getServiceById } from "@/lib/services";
 import { applyCalculations } from "@/lib/formula";
 import { buildFormSchema } from "@/lib/form-schema";
@@ -235,4 +236,76 @@ export async function markNotificationsRead(): Promise<SubmitResult> {
 
   revalidatePath("/account");
   return { ok: true };
+}
+
+/**
+ * Допустимые переходы статуса, которые может выполнять админ. Логику держим в коде
+ * (в БД только CHECK на набор значений, без ограничений на переходы). approved/rejected —
+ * терминальные; draft/awaiting_documents — до-админские (заявка ещё не подана).
+ */
+const ADMIN_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
+  draft: [],
+  awaiting_documents: [],
+  submitted: ["in_review", "rejected"],
+  in_review: ["approved", "rejected"],
+  approved: [],
+  rejected: [],
+};
+
+/**
+ * Смена статуса заявки администратором с записью в историю.
+ * RLS уже позволяет админу UPDATE любой заявки; здесь дополнительно проверяем роль
+ * (defense-in-depth), допустимость перехода и обязательность причины при отклонении.
+ * После смены ревалидируем админ-страницы и кабинет заявителя (уведомление ему придёт
+ * автоматически — оно выводится из status_history).
+ */
+export async function setApplicationStatus(
+  appId: string,
+  next: ApplicationStatus,
+  comment?: string,
+): Promise<SubmitResult> {
+  const profile = await getProfile();
+  if (!profile) return { ok: false, errors: ["Требуется вход в систему"] };
+  if (profile.role !== "admin") return { ok: false, errors: ["Недостаточно прав"] };
+
+  const trimmedComment = comment?.trim() ?? "";
+  if (next === "rejected" && trimmedComment.length === 0) {
+    return { ok: false, errors: ["Укажите причину отклонения"] };
+  }
+
+  const supabase = createClient();
+  const { data: app } = await supabase
+    .from("applications")
+    .select("id, status, status_history")
+    .eq("id", appId)
+    .maybeSingle();
+  if (!app) return { ok: false, errors: ["Заявка не найдена"] };
+
+  const current = app.status as ApplicationStatus;
+  if (!ADMIN_TRANSITIONS[current].includes(next)) {
+    return { ok: false, errors: [`Недопустимый переход: ${current} → ${next}`] };
+  }
+
+  const defaultComment =
+    next === "in_review"
+      ? "Заявка принята в работу"
+      : next === "approved"
+        ? "Заявка одобрена"
+        : "Статус изменён";
+  const history = [
+    ...((app.status_history ?? []) as ApplicationStatusChange[]),
+    historyEntry(next, profile.id, trimmedComment || defaultComment),
+  ];
+
+  const { error } = await supabase
+    .from("applications")
+    .update({ status: next, status_history: history })
+    .eq("id", appId);
+  if (error) return { ok: false, errors: [error.message] };
+
+  revalidatePath("/admin/applications");
+  revalidatePath(`/admin/applications/${appId}`);
+  revalidatePath("/account");
+  revalidatePath(`/account/applications/${appId}`);
+  return { ok: true, status: next, id: appId };
 }
