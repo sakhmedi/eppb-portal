@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 
 import { getPublishedServices } from "@/lib/services";
 import { CatalogBrowser } from "@/components/catalog/catalog-browser";
+import { ServiceFinder } from "@/components/ai/service-finder";
 
 export const metadata: Metadata = {
   title: "Каталог услуг — ЕППБ",
@@ -39,14 +40,30 @@ export default async function CatalogPage() {
       {services.length === 0 ? (
         <p className="text-sm text-muted-foreground">Пока нет опубликованных услуг.</p>
       ) : (
-        // useSearchParams в CatalogBrowser требует Suspense-границы.
-        <Suspense fallback={null}>
-          <CatalogBrowser
-            services={services}
-            categories={categories}
-            organizations={organizations}
-          />
-        </Suspense>
+        <>
+          {/* AI-подбор по описанию ситуации — дополняет обычные фильтры каталога. */}
+          <div className="rounded-xl border bg-muted/30 p-5">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold tracking-tight">
+                Подобрать услугу по ситуации
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Опишите словами, что нужно вашему бизнесу — AI предложит подходящие меры из
+                каталога.
+              </p>
+            </div>
+            <ServiceFinder />
+          </div>
+
+          {/* useSearchParams в CatalogBrowser требует Suspense-границы. */}
+          <Suspense fallback={null}>
+            <CatalogBrowser
+              services={services}
+              categories={categories}
+              organizations={organizations}
+            />
+          </Suspense>
+        </>
       )}
     </main>
   );

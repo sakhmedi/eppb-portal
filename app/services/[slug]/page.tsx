@@ -19,6 +19,7 @@ import {
 
 import { getServiceBySlug } from "@/lib/services";
 import { getServiceFacts, pluralSteps } from "@/lib/service-summary";
+import { ExplainService } from "@/components/ai/explain-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,6 +187,9 @@ export default async function ServicePage({ params }: PageProps) {
           </div>
         </section>
       )}
+
+      {/* AI: объяснить простыми словами (slug на этой странице всегда есть) */}
+      {service.slug && <ExplainService slug={service.slug} />}
 
       {/* Что дальше */}
       <Card>

@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import { getPublishedServices } from "@/lib/services";
 import { SUPPORT_DIRECTIONS } from "@/lib/catalog-directions";
 import { ServiceCard } from "@/components/service-card";
+import { ServiceFinder } from "@/components/ai/service-finder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -107,6 +108,22 @@ export default async function Home() {
               Войти в личный кабинет
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* AI-ПОДБОР ПО СИТУАЦИИ */}
+      <section className="border-b bg-muted/30">
+        <div className="mx-auto w-full max-w-5xl px-4 py-16">
+          <div className="mb-6 max-w-2xl">
+            <h2 className="text-2xl font-bold tracking-tight">
+              Не знаете, что выбрать? Опишите ситуацию
+            </h2>
+            <p className="text-muted-foreground">
+              Расскажите своими словами, что нужно вашему бизнесу — AI подберёт подходящие
+              меры поддержки из каталога.
+            </p>
+          </div>
+          <ServiceFinder className="max-w-2xl" />
         </div>
       </section>
 
