@@ -26,6 +26,22 @@ export function formatCalculatedValue(field: Field, value: unknown): string {
   return numberFormatter.format(num);
 }
 
+/**
+ * Компактная сумма в тенге для карточек проектов: «12,5 млрд ₸», «1,8 млрд ₸», «850 млн ₸».
+ * Крупные суммы читаются лучше в млрд/млн, чем с девятью разрядами.
+ */
+export function formatTenge(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "—";
+  const n = Number(value);
+  if (n >= 1_000_000_000) {
+    return `${numberFormatter.format(Math.round((n / 1_000_000_000) * 10) / 10)} млрд ₸`;
+  }
+  if (n >= 1_000_000) {
+    return `${moneyFormatter.format(Math.round(n / 1_000_000))} млн ₸`;
+  }
+  return `${moneyFormatter.format(Math.round(n))} ₸`;
+}
+
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",

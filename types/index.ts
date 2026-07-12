@@ -9,3 +9,4 @@ export * from "./service";
 export * from "./reference";
 export * from "./application";
 export * from "./user";
+export * from "./project";
