@@ -39,6 +39,11 @@ interface FormRendererProps {
   submitting?: boolean;
   /** Шаги (Step.id), которые показываем только для чтения (напр. уже поданные первичные). */
   readOnlyStepIds?: string[];
+  /**
+   * Необязательный блок, показываемый на ПОСЛЕДНЕМ шаге над кнопкой отправки.
+   * Реальная подача передаёт сюда AI-проверку заявки; демо/предпросмотр — нет.
+   */
+  reviewSlot?: (formData: ApplicationFormData) => React.ReactNode;
 }
 
 export function FormRenderer({
@@ -54,6 +59,7 @@ export function FormRenderer({
   submitLabel = "Отправить",
   submitting,
   readOnlyStepIds,
+  reviewSlot,
 }: FormRendererProps) {
   const engine = useFormEngine(service, initialData, { initialStepId });
   const { currentStep, currentIndex, totalSteps, formData, errors } = engine;
@@ -132,6 +138,9 @@ export function FormRenderer({
           ))}
         </CardContent>
       </Card>
+
+      {/* AI-проверка заявки — только на последнем шаге, перед отправкой (если передана). */}
+      {engine.isLast && reviewSlot && !stepReadOnly && reviewSlot(formData)}
 
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={engine.back} disabled={engine.isFirst}>

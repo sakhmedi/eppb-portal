@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormRenderer } from "@/components/renderer/form-renderer";
+import { GenerateServiceDraft } from "@/components/ai/generate-service";
+import type { GeneratedDraft } from "@/lib/ai/generate-service";
 import {
   saveService,
   publishService,
@@ -67,6 +69,29 @@ export function ServiceConstructor({
   }
   function deleteStep(id: string) {
     setSteps(service.steps.filter((s) => s.id !== id));
+  }
+
+  // Подставить AI-черновик в редактор. Структура уже провалидирована serviceConfigSchema на
+  // сервере. Если у услуги уже есть шаги — не затираем молча, спрашиваем подтверждение.
+  function applyDraft(draft: GeneratedDraft) {
+    if (
+      service.steps.length > 0 &&
+      !window.confirm(
+        "Заменить текущую структуру услуги сгенерированным черновиком? Текущие этапы будут заменены.",
+      )
+    ) {
+      return;
+    }
+    setService((s) => ({
+      ...s,
+      title: draft.meta.title ?? s.title,
+      description: draft.meta.description ?? s.description,
+      category: draft.meta.category ?? s.category,
+      organization: draft.meta.organization ?? s.organization,
+      steps: draft.steps.map((st, i) => ({ ...st, order: i + 1 })),
+    }));
+    setMessage("Черновик сгенерирован AI и подставлен в конструктор — проверьте и доработайте.");
+    setErrors([]);
   }
 
   // ── сохранение / публикация ───────────────────────────────────────────────
@@ -151,6 +176,9 @@ export function ServiceConstructor({
       <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Редактор ── */}
         <div className="space-y-4">
+          {/* AI-помощник автору: собрать черновик услуги по текстовому описанию. */}
+          <GenerateServiceDraft onGenerated={applyDraft} />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Карточка услуги</CardTitle>

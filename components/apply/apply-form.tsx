@@ -20,6 +20,7 @@ import { checkCompanyByBin } from "@/lib/integration-actions";
 import { mapCompanyToPrefill } from "@/lib/company-prefill";
 import type { BinCheckResult } from "@/components/renderer/field-row";
 import { FormRenderer } from "@/components/renderer/form-renderer";
+import { ApplicationReview } from "@/components/ai/application-review";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -231,6 +232,17 @@ export function ApplyForm({
         onSubmit={handleSubmit}
         submitLabel={submitLabel}
         submitting={submitting}
+        reviewSlot={
+          service.slug
+            ? (formData) => (
+                <ApplicationReview
+                  slug={service.slug as string}
+                  phase={activePhase}
+                  formData={formData}
+                />
+              )
+            : undefined
+        }
       />
     </div>
   );

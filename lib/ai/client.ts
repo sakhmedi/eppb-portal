@@ -20,6 +20,14 @@ import Anthropic from "@anthropic-ai/sdk";
 export const AI_MODEL = "claude-haiku-4-5-20251001";
 
 /**
+ * Модель для ГЕНЕРАЦИИ СТРУКТУРЫ услуги (конструктор). Здесь важнее не цена, а надёжность:
+ * нужно выдать валидный JSON нашей схемы с ветвлением и формулами. Haiku на такой задаче
+ * чаще ошибается, поэтому используем Sonnet. Операция редкая (автор-админ заводит услугу),
+ * так что цена незначима. Частые функции (подбор, объяснение, проверка заявки) — на Haiku.
+ */
+export const AI_MODEL_STRUCTURE = "claude-sonnet-5";
+
+/**
  * Результат любой AI-операции. Дискриминированный юнион вместо исключений:
  * - `ok: true`  — есть данные;
  * - `unavailable` — AI недоступен (нет ключа, сеть, лимиты, ошибка API);
@@ -46,6 +54,8 @@ export interface GenerateTextParams {
   user: string;
   /** Верхняя граница длины ответа. */
   maxTokens: number;
+  /** Модель Anthropic; по умолчанию Haiku (AI_MODEL). Для генерации структуры — Sonnet. */
+  model?: string;
 }
 
 /**
@@ -56,6 +66,7 @@ export async function generateText({
   system,
   user,
   maxTokens,
+  model = AI_MODEL,
 }: GenerateTextParams): Promise<AiResult<string>> {
   const client = getClient();
   if (!client) {
@@ -65,7 +76,7 @@ export async function generateText({
 
   try {
     const response = await client.messages.create({
-      model: AI_MODEL,
+      model,
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: user }],
