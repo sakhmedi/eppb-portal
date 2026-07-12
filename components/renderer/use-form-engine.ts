@@ -31,6 +31,8 @@ function buildInitialData(service: Service, initialData?: ApplicationFormData): 
 export interface FormEngine {
   formData: ApplicationFormData;
   setValue: (key: string, value: unknown) => void;
+  /** Задать сразу несколько полей (напр. предзаполнение по БИН из реестра). */
+  setValues: (patch: Record<string, unknown>) => void;
   /** Видимые шаги (в порядке order, скрытые ветвлением выброшены). */
   visibleSteps: Step[];
   currentStep: Step;
@@ -107,6 +109,18 @@ export function useFormEngine(
     });
   }
 
+  function setValues(patch: Record<string, unknown>) {
+    const keys = Object.keys(patch);
+    if (keys.length === 0) return;
+    // Один прогон: применяем весь patch и пересчитываем расчётные поля один раз.
+    setFormData((prev) => applyCalculations(service, { ...prev, ...patch }));
+    setErrors((prev) => {
+      const rest = { ...prev };
+      for (const key of keys) delete rest[key];
+      return rest;
+    });
+  }
+
   /** Валидация только текущего шага: строим схему из под-услуги с одним шагом. */
   function validateCurrentStep(): boolean {
     // buildFormSchema принимает Service — подсовываем услугу с единственным шагом.
@@ -139,6 +153,7 @@ export function useFormEngine(
   return {
     formData,
     setValue,
+    setValues,
     visibleSteps,
     currentStep,
     currentIndex: safeIndex,

@@ -16,9 +16,14 @@ import type { ReferenceOption, ID } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { splitStages, serviceForStage } from "@/lib/application-stages";
 import { saveDraft, submitPrimary, submitDocuments } from "@/lib/application-actions";
+import { checkCompanyByBin } from "@/lib/integration-actions";
+import { mapCompanyToPrefill } from "@/lib/company-prefill";
+import type { BinCheckResult } from "@/components/renderer/field-row";
 import { FormRenderer } from "@/components/renderer/form-renderer";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDateTime } from "@/lib/format";
 
 const BUCKET = "application-documents";
 
@@ -80,6 +85,8 @@ export function ApplyForm({
   const [confirmation, setConfirmation] = useState<{
     status: ApplicationStatus;
     id: string;
+    externalRef?: string;
+    signedAt?: string;
   } | null>(null);
 
   // Автосейв прогресса при смене шага (best-effort — ошибки не мешают заполнению).
@@ -117,6 +124,18 @@ export function ApplyForm({
     return { storagePath, fileName: file.name };
   }
 
+  // Проверка БИН во внешнем реестре (демо-интеграция) + подготовка предзаполнения.
+  // Маппинг «данные компании → поля услуги» знает про эту услугу, поэтому делаем его здесь.
+  async function handleCheckBin(bin: string): Promise<BinCheckResult> {
+    const result = await checkCompanyByBin(bin);
+    if (!result.found) return { found: false };
+    return {
+      found: true,
+      company: result.company,
+      patch: mapCompanyToPrefill(service, result.company),
+    };
+  }
+
   async function handleSubmit(formData: ApplicationFormData) {
     setSubmitting(true);
     setErrors([]);
@@ -129,7 +148,12 @@ export function ApplyForm({
     if (result.ok && result.status) {
       // Запоминаем первичные ответы — понадобятся на этапе документов для ветвления.
       if (activePhase === "primary") setSubmittedData(formData);
-      setConfirmation({ status: result.status, id: result.id ?? applicationId });
+      setConfirmation({
+        status: result.status,
+        id: result.id ?? applicationId,
+        externalRef: result.externalRef,
+        signedAt: result.signedAt,
+      });
     } else {
       setErrors(result.errors ?? ["Не удалось отправить заявку"]);
     }
@@ -146,6 +170,8 @@ export function ApplyForm({
       <Confirmation
         status={confirmation.status}
         id={confirmation.id}
+        externalRef={confirmation.externalRef}
+        signedAt={confirmation.signedAt}
         onContinue={goToDocuments}
       />
     );
@@ -201,6 +227,7 @@ export function ApplyForm({
         readOnlyStepIds={readOnlyStepIds}
         onStepAdvance={handleStepAdvance}
         onUploadFile={handleUploadFile}
+        onCheckBin={handleCheckBin}
         onSubmit={handleSubmit}
         submitLabel={submitLabel}
         submitting={submitting}
@@ -213,10 +240,14 @@ export function ApplyForm({
 function Confirmation({
   status,
   id,
+  externalRef,
+  signedAt,
   onContinue,
 }: {
   status: ApplicationStatus;
   id: string;
+  externalRef?: string;
+  signedAt?: string;
   onContinue: () => void;
 }) {
   const number = id.slice(0, 8).toUpperCase();
@@ -261,9 +292,29 @@ function Confirmation({
           </>
         ) : (
           <>
+            {(externalRef || signedAt) && (
+              <div className="space-y-1.5 rounded-md border border-brand bg-brand-subtle p-3 text-foreground">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">Обработка через интеграционную шину</span>
+                  <Badge variant="outline" className="border-brand text-brand">
+                    демо-интеграция
+                  </Badge>
+                </div>
+                {signedAt && (
+                  <div className="text-xs">
+                    Подписано ЭЦП: {formatDateTime(signedAt)}
+                  </div>
+                )}
+                {externalRef && (
+                  <div className="text-xs">
+                    Внешний номер BPM: <span className="font-semibold">{externalRef}</span>
+                  </div>
+                )}
+              </div>
+            )}
             <p>
-              Заявка передана в организацию на рассмотрение. Следить за статусом можно в
-              личном кабинете.
+              Заявка подписана ЭЦП и передана во внешнюю BPM-систему на рассмотрение. Следить
+              за статусом можно в личном кабинете.
             </p>
             <Button asChild className="bg-brand">
               <Link href="/account">В личный кабинет</Link>

@@ -20,6 +20,7 @@ import {
   serviceForStage,
   documentStageFieldKeys,
 } from "@/lib/application-stages";
+import { submitApplicationToBus } from "@/lib/integrations";
 import type {
   ApplicationFormData,
   ApplicationDocument,
@@ -32,6 +33,10 @@ export interface SubmitResult {
   errors?: string[];
   status?: ApplicationStatus;
   id?: string;
+  /** Внешний номер BPM (демо-интеграция) — для экрана подтверждения. */
+  externalRef?: string;
+  /** Метка подписания ЭЦП (демо-интеграция) — для экрана подтверждения. */
+  signedAt?: string;
 }
 
 /** Уникальные человекочитаемые сообщения из ошибок Zod. */
@@ -45,6 +50,63 @@ function historyEntry(
   comment: string,
 ): ApplicationStatusChange {
   return { status, changedBy: userId, changedAt: new Date().toISOString(), comment };
+}
+
+interface FinalizedSubmission {
+  externalRef: string;
+  signedAt: string;
+  /** История с добавленными событиями ЭЦП и BPM (поверх переданной baseHistory). */
+  history: ApplicationStatusChange[];
+}
+
+/**
+ * Провести поданную заявку через Единую интеграционную шину (демо): подпись ЭЦП + передача
+ * в BPM + внешнее уведомление. Дополняет историю двумя событиями. Вызывается только при
+ * финальной подаче (status = submitted).
+ */
+async function finalizeThroughBus(
+  appId: string,
+  serviceTitle: string,
+  userId: string,
+  userEmail: string,
+  baseHistory: ApplicationStatusChange[],
+): Promise<FinalizedSubmission> {
+  const bus = await submitApplicationToBus({
+    applicationId: appId,
+    serviceTitle,
+    recipient: userEmail,
+  });
+  const history = [
+    ...baseHistory,
+    historyEntry("submitted", userId, `Подписано ЭЦП (демо): ${bus.signatureId}`),
+    historyEntry("submitted", userId, `Передано в BPM (демо): № ${bus.externalRef}`),
+  ];
+  return { externalRef: bus.externalRef, signedAt: bus.signedAt, history };
+}
+
+/**
+ * Сохранить финальную подачу с интеграционными полями external_ref/signed_at.
+ * Если колонок ещё нет (миграция не применена) — сохраняем без них; события всё равно
+ * записаны в status_history. Возвращает ошибку сохранения или null.
+ */
+async function persistSubmission(
+  supabase: ReturnType<typeof createClient>,
+  appId: string,
+  baseUpdate: Record<string, unknown>,
+  externalRef: string,
+  signedAt: string,
+): Promise<{ message: string } | null> {
+  const { error } = await supabase
+    .from("applications")
+    .update({ ...baseUpdate, external_ref: externalRef, signed_at: signedAt })
+    .eq("id", appId);
+  if (!error) return null;
+
+  const { error: fallbackError } = await supabase
+    .from("applications")
+    .update(baseUpdate)
+    .eq("id", appId);
+  return fallbackError ? { message: fallbackError.message } : null;
 }
 
 /**
@@ -132,20 +194,47 @@ export async function submitPrimary(
 
   const nextStatus: ApplicationStatus = hasDocumentStage ? "awaiting_documents" : "submitted";
   const comment = hasDocumentStage ? "Первичная заявка подана" : "Заявка подана";
-  const history = [
+  const baseHistory = [
     ...((app.status_history ?? []) as ApplicationStatusChange[]),
     historyEntry(nextStatus, user.id, comment),
   ];
 
-  const { error } = await supabase
-    .from("applications")
-    .update({
-      form_data: recalculated,
-      service_version: service.version ?? null,
+  const baseUpdate = {
+    form_data: recalculated,
+    service_version: service.version ?? null,
+    status: nextStatus,
+    status_history: baseHistory,
+  };
+
+  // Услуга без этапа документов подаётся сразу — проводим её через шину (ЭЦП + BPM).
+  if (nextStatus === "submitted") {
+    const bus = await finalizeThroughBus(
+      appId,
+      service.title,
+      user.id,
+      user.email ?? "",
+      baseHistory,
+    );
+    const persistError = await persistSubmission(
+      supabase,
+      appId,
+      { ...baseUpdate, status_history: bus.history },
+      bus.externalRef,
+      bus.signedAt,
+    );
+    if (persistError) return { ok: false, errors: [persistError.message] };
+
+    revalidatePath("/account");
+    return {
+      ok: true,
       status: nextStatus,
-      status_history: history,
-    })
-    .eq("id", appId);
+      id: appId,
+      externalRef: bus.externalRef,
+      signedAt: bus.signedAt,
+    };
+  }
+
+  const { error } = await supabase.from("applications").update(baseUpdate).eq("id", appId);
   if (error) return { ok: false, errors: [error.message] };
 
   revalidatePath("/account");
@@ -195,24 +284,42 @@ export async function submitDocuments(
   const result = schema.safeParse(recalculated);
   if (!result.success) return { ok: false, errors: messagesOf(result.error) };
 
-  const history = [
+  const baseHistory = [
     ...((app.status_history ?? []) as ApplicationStatusChange[]),
     historyEntry("submitted", user.id, "Документы предоставлены, заявка подана"),
   ];
 
-  const { error } = await supabase
-    .from("applications")
-    .update({
+  // Финальная подача — проводим заявку через шину (ЭЦП + BPM + уведомление).
+  const bus = await finalizeThroughBus(
+    appId,
+    service.title,
+    user.id,
+    user.email ?? "",
+    baseHistory,
+  );
+
+  const persistError = await persistSubmission(
+    supabase,
+    appId,
+    {
       form_data: recalculated,
       documents: documents ?? (app.documents ?? []),
       status: "submitted",
-      status_history: history,
-    })
-    .eq("id", appId);
-  if (error) return { ok: false, errors: [error.message] };
+      status_history: bus.history,
+    },
+    bus.externalRef,
+    bus.signedAt,
+  );
+  if (persistError) return { ok: false, errors: [persistError.message] };
 
   revalidatePath("/account");
-  return { ok: true, status: "submitted", id: appId };
+  return {
+    ok: true,
+    status: "submitted",
+    id: appId,
+    externalRef: bus.externalRef,
+    signedAt: bus.signedAt,
+  };
 }
 
 /**

@@ -14,7 +14,7 @@ import type { Service, ApplicationFormData, ReferenceOption, ID } from "@/types"
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFormEngine } from "./use-form-engine";
-import { FieldRow, type UploadFileHandler } from "./field-row";
+import { FieldRow, type UploadFileHandler, type BinCheckHandler } from "./field-row";
 
 interface FormRendererProps {
   service: Service;
@@ -31,6 +31,8 @@ interface FormRendererProps {
   onStepAdvance?: (formData: ApplicationFormData, currentStepId: string) => void;
   /** Загрузка файла для поля type="file"; возвращает путь в Storage. */
   onUploadFile?: UploadFileHandler;
+  /** Проверка БИН во внешнем реестре для поля type="bin" (демо-интеграция). */
+  onCheckBin?: BinCheckHandler;
   /** Подпись кнопки отправки (по умолчанию «Отправить»). */
   submitLabel?: string;
   /** Идёт отправка — блокируем кнопку. */
@@ -48,6 +50,7 @@ export function FormRenderer({
   onSubmit,
   onStepAdvance,
   onUploadFile,
+  onCheckBin,
   submitLabel = "Отправить",
   submitting,
   readOnlyStepIds,
@@ -121,6 +124,8 @@ export function FormRenderer({
               error={errors[field.key]}
               references={references}
               onUploadFile={onUploadFile}
+              onCheckBin={onCheckBin}
+              onPrefill={engine.setValues}
               disabled={stepReadOnly}
               onChange={(value) => engine.setValue(field.key, value)}
             />

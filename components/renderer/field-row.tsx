@@ -5,6 +5,7 @@
 // так пользователь не видит нерелевантные поля (ветвление на уровне поля).
 
 import type { Field, ApplicationFormData, ReferenceOption, ID } from "@/types";
+import type { CompanyInfo } from "@/lib/integrations/types";
 import { isVisible } from "@/lib/logic";
 import { Label } from "@/components/ui/label";
 import { FieldControl } from "./field-control";
@@ -16,12 +17,26 @@ export type UploadFileHandler = (
   file: File,
 ) => Promise<{ storagePath: string; fileName: string }>;
 
+/** Результат проверки БИН для формы: найдена ли компания + готовый patch предзаполнения. */
+export interface BinCheckResult {
+  found: boolean;
+  company?: CompanyInfo;
+  patch?: Record<string, unknown>;
+}
+
+/** Обработчик проверки БИН: по номеру возвращает данные компании и patch для формы. */
+export type BinCheckHandler = (bin: string) => Promise<BinCheckResult>;
+
 interface FieldRowProps {
   field: Field;
   formData: ApplicationFormData;
   error?: string;
   references?: Record<ID, ReferenceOption[]>;
   onUploadFile?: UploadFileHandler;
+  /** Проверка БИН во внешнем реестре (демо-интеграция). */
+  onCheckBin?: BinCheckHandler;
+  /** Применить предзаполнение сразу к нескольким полям. */
+  onPrefill?: (patch: Record<string, unknown>) => void;
   /** Поле только для чтения (напр. уже поданные первичные данные на этапе документов). */
   disabled?: boolean;
   onChange: (value: unknown) => void;
@@ -33,6 +48,8 @@ export function FieldRow({
   error,
   references,
   onUploadFile,
+  onCheckBin,
+  onPrefill,
   disabled,
   onChange,
 }: FieldRowProps) {
@@ -57,6 +74,8 @@ export function FieldRow({
       value={formData[field.key]}
       options={options}
       onUploadFile={onUploadFile}
+      onCheckBin={onCheckBin}
+      onPrefill={onPrefill}
       disabled={disabled}
       onChange={onChange}
     />

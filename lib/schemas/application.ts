@@ -39,6 +39,8 @@ export const applicationSchema = z.object({
   formData: z.record(z.string(), z.unknown()),
   documents: z.array(applicationDocumentSchema),
   statusHistory: z.array(applicationStatusChangeSchema),
+  externalRef: z.string().optional(),
+  signedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

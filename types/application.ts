@@ -54,4 +54,8 @@ export interface Application extends Timestamps {
   formData: ApplicationFormData;
   documents: ApplicationDocument[];
   statusHistory: ApplicationStatusChange[];
+  /** Внешний регистрационный номер в BPM дочерней организации (получен через шину). */
+  externalRef?: string;
+  /** Момент подписания заявки ЭЦП (получен через шину). */
+  signedAt?: ISODateString;
 }

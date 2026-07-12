@@ -92,8 +92,9 @@ export function buildPrefill(service: Service, profile: Profile | null): Applica
       ) {
         data[field.key] = profile.full_name;
       }
-      // TODO: предзаполнение по БИН (подтягивание реквизитов из внешнего реестра) —
-      // реализуем в задаче про интеграции; здесь mock не выдумываем.
+      // Предзаполнение по БИН реализовано интерактивно (кнопка «Проверить» в форме):
+      // lib/integration-actions.ts → checkCompanyByBin, маппинг — lib/company-prefill.ts.
+      // Здесь, на серверном профильном предзаполнении, реквизиты из реестра не тянем.
     }
   }
 

@@ -6,6 +6,8 @@
 import { useState } from "react";
 import type { Field, FieldOption } from "@/types";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -18,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { formatCalculatedValue } from "@/lib/format";
-import type { UploadFileHandler } from "./field-row";
+import type { CompanyInfo } from "@/lib/integrations/types";
+import type { UploadFileHandler, BinCheckHandler } from "./field-row";
 
 interface FieldControlProps {
   field: Field;
@@ -28,6 +31,10 @@ interface FieldControlProps {
   options: FieldOption[];
   /** Реальная загрузка файла (если не передан — file-поле хранит только имя). */
   onUploadFile?: UploadFileHandler;
+  /** Проверка БИН во внешнем реестре (демо-интеграция). */
+  onCheckBin?: BinCheckHandler;
+  /** Применить предзаполнение к нескольким полям (после проверки БИН). */
+  onPrefill?: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
 }
 
@@ -37,6 +44,8 @@ export function FieldControl({
   onChange,
   options,
   onUploadFile,
+  onCheckBin,
+  onPrefill,
   disabled,
 }: FieldControlProps) {
   const id = `field-${field.key}`;
@@ -149,6 +158,34 @@ export function FieldControl({
         />
       );
 
+    case "bin":
+      // БИН/ИИН с проверкой во внешнем реестре (демо-интеграция): кнопка «Проверить»
+      // подтягивает и предзаполняет реквизиты. Без onCheckBin (демо-страница) — обычный input.
+      if (onCheckBin && onPrefill) {
+        return (
+          <BinCheckControl
+            id={id}
+            value={value}
+            placeholder={field.placeholder}
+            disabled={disabled}
+            onChange={onChange}
+            onCheckBin={onCheckBin}
+            onPrefill={onPrefill}
+          />
+        );
+      }
+      return (
+        <Input
+          id={id}
+          type="text"
+          value={(value as string) ?? ""}
+          placeholder={field.placeholder}
+          disabled={disabled}
+          inputMode="numeric"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+
     case "calculated":
       // Расчётное поле пользователь не вводит — значение считает движок.
       // Показываем отформатированным (деньги — с округлением и разрядами).
@@ -157,7 +194,7 @@ export function FieldControl({
       );
 
     default:
-      // text / email / phone / iin / bin
+      // text / email / phone / iin (bin — в отдельном case выше)
       return (
         <Input
           id={id}
@@ -165,7 +202,7 @@ export function FieldControl({
           value={(value as string) ?? ""}
           placeholder={field.placeholder}
           disabled={disabled}
-          inputMode={field.type === "iin" || field.type === "bin" ? "numeric" : undefined}
+          inputMode={field.type === "iin" ? "numeric" : undefined}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -232,6 +269,102 @@ function FileUploadControl({
         <p className="text-xs text-muted-foreground">Файл уже загружен.</p>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * БИН/ИИН с проверкой во внешнем реестре (демо-интеграция).
+ * По кнопке «Проверить» зовёт onCheckBin; при успехе предзаполняет другие поля через
+ * onPrefill и показывает, что данные пришли из внешнего источника (с бейджем «демо-интеграция»).
+ */
+function BinCheckControl({
+  id,
+  value,
+  placeholder,
+  disabled,
+  onChange,
+  onCheckBin,
+  onPrefill,
+}: {
+  id: string;
+  value: unknown;
+  placeholder?: string;
+  disabled?: boolean;
+  onChange: (value: unknown) => void;
+  onCheckBin: BinCheckHandler;
+  onPrefill: (patch: Record<string, unknown>) => void;
+}) {
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState<CompanyInfo | "notfound" | null>(null);
+
+  const bin = typeof value === "string" ? value : "";
+  const canCheck = /^\d{12}$/.test(bin.trim());
+
+  async function handleCheck() {
+    setChecking(true);
+    setResult(null);
+    try {
+      const res = await onCheckBin(bin.trim());
+      if (res.found && res.company) {
+        if (res.patch) onPrefill(res.patch);
+        setResult(res.company);
+      } else {
+        setResult("notfound");
+      }
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          type="text"
+          value={bin}
+          placeholder={placeholder}
+          disabled={disabled}
+          inputMode="numeric"
+          onChange={(e) => {
+            onChange(e.target.value);
+            setResult(null);
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleCheck}
+          disabled={disabled || checking || !canCheck}
+        >
+          {checking ? "Проверка…" : "Проверить"}
+        </Button>
+      </div>
+
+      {!result && !checking && (
+        <p className="text-xs text-muted-foreground">
+          Демо-режим: попробуйте БИН 990140000135 или 050340001234.
+        </p>
+      )}
+
+      {result && result !== "notfound" && (
+        <div className="rounded-md border border-brand bg-brand-subtle p-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{result.name}</span>
+            <Badge variant="outline" className="border-brand text-brand">
+              демо-интеграция
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Данные получены из внешнего реестра и подставлены в форму.
+          </p>
+        </div>
+      )}
+
+      {result === "notfound" && (
+        <p className="text-xs text-muted-foreground">Компания не найдена в реестре.</p>
+      )}
     </div>
   );
 }
