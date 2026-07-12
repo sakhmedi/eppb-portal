@@ -24,6 +24,9 @@ export async function SiteHeader() {
           <Link href="/projects" className="transition-colors hover:text-foreground">
             Карта проектов
           </Link>
+          <Link href="/analytics" className="transition-colors hover:text-foreground">
+            Аналитика
+          </Link>
           {profile && (
             <Link href="/account" className="transition-colors hover:text-foreground">
               Кабинет

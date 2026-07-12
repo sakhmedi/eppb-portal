@@ -109,6 +109,13 @@ export default async function Home() {
             </Link>
             <span className="text-white/30">·</span>
             <Link
+              href="/analytics"
+              className="text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
+            >
+              Аналитика
+            </Link>
+            <span className="text-white/30">·</span>
+            <Link
               href="/account"
               className="text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
             >
