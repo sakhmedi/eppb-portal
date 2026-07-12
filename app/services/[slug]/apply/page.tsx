@@ -11,9 +11,11 @@ import { ChevronRight } from "lucide-react";
 
 import { getUser, getProfile } from "@/lib/auth";
 import { getServiceBySlug, listReferenceLists, referencesToMap } from "@/lib/services";
-import { getOrCreateApplication } from "@/lib/applications";
+import { getOrCreateApplication, getApplicationIntegrationInfo } from "@/lib/applications";
 import { splitStages, buildPrefill } from "@/lib/application-stages";
+import { formatDateTime } from "@/lib/format";
 import type { ApplicationFormData } from "@/types";
+import { Badge } from "@/components/ui/badge";
 import { ApplyForm } from "@/components/apply/apply-form";
 
 interface PageProps {
@@ -71,6 +73,10 @@ export default async function ApplyPage({ params }: PageProps) {
     application.status === "approved" ||
     application.status === "rejected"
   ) {
+    // Результаты интеграций (демо): внешний номер BPM и подпись ЭЦП, если есть.
+    const integration = await getApplicationIntegrationInfo(application.id);
+    const hasIntegration = integration && (integration.externalRef || integration.signedAt);
+
     return (
       <main className="mx-auto max-w-2xl space-y-6 px-4 py-10">
         {header}
@@ -83,6 +89,29 @@ export default async function ApplyPage({ params }: PageProps) {
             Статус: {STATUS_LABEL[application.status] ?? application.status}
           </div>
         </div>
+
+        {hasIntegration && (
+          <div className="space-y-1.5 rounded-md border border-brand bg-brand-subtle p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">Обработка через интеграционную шину</span>
+              <Badge variant="outline" className="border-brand text-brand">
+                демо-интеграция
+              </Badge>
+            </div>
+            {integration?.signedAt && (
+              <div className="text-sm text-muted-foreground">
+                Подписано ЭЦП: {formatDateTime(integration.signedAt)}
+              </div>
+            )}
+            {integration?.externalRef && (
+              <div className="text-sm text-muted-foreground">
+                Внешний номер BPM:{" "}
+                <span className="font-semibold text-foreground">{integration.externalRef}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground">
           Заявка уже подана. Следить за её статусом можно в{" "}
           <Link href="/account" className="underline underline-offset-4">

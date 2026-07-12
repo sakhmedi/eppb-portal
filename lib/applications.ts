@@ -172,6 +172,30 @@ export async function getApplicationById(id: string): Promise<ApplicationDetail 
   };
 }
 
+/** Результаты прохождения заявки через интеграционную шину (демо). */
+export interface IntegrationInfo {
+  externalRef: string | null;
+  signedAt: string | null;
+}
+
+/**
+ * Интеграционные поля заявки (external_ref/signed_at). Best-effort: если миграция
+ * ещё не применена и колонок нет, возвращаем null (данные всё равно есть в истории).
+ */
+export async function getApplicationIntegrationInfo(id: string): Promise<IntegrationInfo | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("external_ref, signed_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    externalRef: (data.external_ref as string | null) ?? null,
+    signedAt: (data.signed_at as string | null) ?? null,
+  };
+}
+
 /** Профиль заявителя (для шапки заявки в админке). */
 export interface ApplicantProfile {
   fullName: string | null;
